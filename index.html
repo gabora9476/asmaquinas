@@ -401,6 +401,37 @@ function badge(estado, labelMap){
 }
 function emptyState(icon, text){ return '<div class="empty-state"><i data-ic="'+icon+'"></i><div>'+esc(text)+'</div></div>'; }
 
+/* ---------- formato en vivo: nombres en Título y teléfonos +58 ---------- */
+function capitalizarLive(s){ return s.replace(/\S+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()); }
+function normalizarTelefonoVE(raw){
+  let v = String(raw||'').replace(/[^\d+]/g,'').replace(/(?!^)\+/g,'');
+  let digits = v.replace(/\+/g,'');
+  if(digits.startsWith('58')) digits = digits.slice(2);
+  else if(digits.startsWith('0')) digits = digits.slice(1);
+  digits = digits.slice(0,10);
+  if(digits.length===0) return '';
+  if(digits.length<=3) return '+58 '+digits;
+  return '+58 '+digits.slice(0,3)+digits.slice(3);
+}
+function telefonoWhatsapp(tel){
+  let d = String(tel||'').replace(/\D/g,'');
+  if(d.startsWith('58')) return d;
+  if(d.startsWith('0')) return '58'+d.slice(1);
+  return '58'+d;
+}
+document.addEventListener('input', function(e){
+  var el = e.target;
+  if(!el || !el.tagName) return;
+  if(el.tagName==='INPUT' && el.type==='tel'){
+    var v = normalizarTelefonoVE(el.value);
+    el.value = v; el.setSelectionRange(v.length, v.length);
+  } else if(el.dataset && el.dataset.cap==='nombre'){
+    var pos = el.selectionStart;
+    el.value = capitalizarLive(el.value);
+    el.setSelectionRange(pos, pos);
+  }
+});
+
 /* Toast */
 let toastTimer=null;
 function toast(msg, isErr){
@@ -764,19 +795,42 @@ async function buscarLavados(){
       </span>
       <span class="amt mono">${fmtUsd(l.precio_usd)}</span>
       <span class="acts">
-        ${l.estado==='en_proceso'?`<button class="btn btn-primary btn-sm" onclick="completarLavado('${l.id}','${l.cliente_id||''}')">Completar</button>`:''}
+        ${l.estado==='en_proceso'?`<button class="btn btn-primary btn-sm" onclick='completarLavado(${JSON.stringify(l)})'>Completar</button>`:''}
         ${(!l.anulado && esJefeOAdmin())?`<button class="btn btn-danger btn-sm" onclick="pedirAnularLavado('${l.id}')">Anular</button>`:''}
       </span>
     </div>
   `).join('');
   drawIcons(cont);
 }
-async function completarLavado(id, clienteId){
-  const {error} = await sb.from('lavados').update({estado:'completado'}).eq('id', id);
+async function completarLavado(lavado){
+  const {error} = await sb.from('lavados').update({estado:'completado'}).eq('id', lavado.id);
   if(error){ toast('No se pudo completar: '+mensajeError(error), true); return; }
-  if(clienteId) await sumarSelloFidelidad(clienteId);
+  if(lavado.cliente_id) await sumarSelloFidelidad(lavado.cliente_id);
   toast('Lavado marcado como completado');
   buscarLavados();
+  if(lavado.telefono) abrirDialogoNotificarCliente(lavado);
+}
+function construirMensajeListo(lavado){
+  const nombreCorto = capitalizarLive((lavado.nombre_cliente||'').trim().split(/\s+/)[0] || '');
+  const vehLabel = labelTipoVeh(lavado.tipo_vehiculo).toLowerCase();
+  const vehEmoji = {moto:'🏍️', carro:'🚗', camioneta:'🚙', otro:'🚘'}[lavado.tipo_vehiculo] || '🚘';
+  return `¡Hola ${nombreCorto}! 👋✨\n\nTu ${vehLabel} ${vehEmoji} ya está listo, quedó limpio y reluciente 🧼💦\n\n¡Ya puedes pasar a retirarlo cuando gustes! ✅🙌\n\nGracias por confiar en *Máquinas Autoservicios* 💚🚿\n¡Te esperamos pronto en tu próxima visita! 🔁😄`;
+}
+function abrirDialogoNotificarCliente(lavado){
+  abrirModal('Lavado completado 🎉', `
+    <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 4px;">¿Deseas notificarle a <b style="color:var(--ink);">${esc(lavado.nombre_cliente||'el cliente')}</b> que su vehículo ya está listo?</p>
+    <div class="modal-actions">
+      <button class="btn btn-glass btn-block" id="btnNoNotificar">No</button>
+      <button class="btn btn-primary btn-block" id="btnSiNotificar"><i data-ic="phone"></i>Notificar</button>
+    </div>
+  `);
+  drawIcons(document.getElementById('modalRoot'));
+  document.getElementById('btnNoNotificar').addEventListener('click', cerrarModal);
+  document.getElementById('btnSiNotificar').addEventListener('click', function(){
+    const url = 'https://wa.me/'+telefonoWhatsapp(lavado.telefono)+'?text='+encodeURIComponent(construirMensajeListo(lavado));
+    window.open(url, '_blank');
+    cerrarModal();
+  });
 }
 function pedirAnularLavado(id){
   confirmarAccion('Anular lavado', 'Esta acción anulará el recibo del lavado. Escribe el motivo.', 'Anular lavado', async (motivo)=>{
@@ -791,9 +845,9 @@ async function modalNuevoLavado(prefill){
   const opcionesServicio = (servicios||[]).map(s=>`<option value="${s.id}" data-precio="${s.precio_usd}" data-tipo="${s.tipo_vehiculo}">${esc(s.nombre)} (${labelTipoVeh(s.tipo_vehiculo)}) — ${fmtUsd(s.precio_usd)}</option>`).join('');
   abrirModal(prefill.citaId?'Atender cita — nuevo lavado':'Nuevo lavado', `
     <label class="field-label">Teléfono del cliente</label>
-    <input type="tel" id="nlTelefono" placeholder="0412-0000000" value="${esc(prefill.telefono||'')}">
+    <input type="tel" id="nlTelefono" placeholder="0412-1234567" value="${esc(prefill.telefono||'')}">
     <label class="field-label">Nombre del cliente</label>
-    <input type="text" id="nlNombre" placeholder="Nombre y apellido" value="${esc(prefill.nombre||'')}">
+    <input type="text" id="nlNombre" data-cap="nombre" placeholder="Nombre y apellido" value="${esc(prefill.nombre||'')}">
     <div class="form-row2">
       <div><label class="field-label">Tipo de vehículo</label>
         <select id="nlTipo">
@@ -919,8 +973,8 @@ async function modalNuevaCita(){
   const {data: servicios} = await sb.from('servicios').select('*').eq('activo', true).order('nombre');
   const opcionesServicio = (servicios||[]).map(s=>`<option value="${s.id}" data-tipo="${s.tipo_vehiculo}">${esc(s.nombre)} (${labelTipoVeh(s.tipo_vehiculo)})</option>`).join('');
   abrirModal('Apartar cita de lavado', `
-    <label class="field-label">Teléfono del cliente</label><input type="tel" id="ncTelefono" placeholder="0412-0000000">
-    <label class="field-label">Nombre del cliente</label><input type="text" id="ncNombre" placeholder="Nombre y apellido">
+    <label class="field-label">Teléfono del cliente</label><input type="tel" id="ncTelefono" placeholder="0412-1234567">
+    <label class="field-label">Nombre del cliente</label><input type="text" id="ncNombre" data-cap="nombre" placeholder="Nombre y apellido">
     <div class="form-row2">
       <div><label class="field-label">Tipo de vehículo</label>
         <select id="ncTipo"><option value="carro">Carro</option><option value="moto">Moto</option><option value="camioneta">Camioneta</option><option value="otro">Otro</option></select></div>
@@ -1034,7 +1088,7 @@ function abrirModalProductoJSON(p){ modalProducto(p); }
 function modalProducto(p){
   p = p || {};
   abrirModal(p.id?'Editar producto':'Nuevo producto', `
-    <label class="field-label">Nombre</label><input type="text" id="pNombre" value="${esc(p.nombre||'')}">
+    <label class="field-label">Nombre</label><input type="text" id="pNombre" data-cap="nombre" value="${esc(p.nombre||'')}">
     <div class="form-row2">
       <div><label class="field-label">Categoría</label>
         <select id="pCategoria">
@@ -1092,8 +1146,8 @@ async function renderVenderProductos(){
     <div class="divider"></div>
     <div id="carritoLineas"></div>
     <div class="divider"></div>
-    <label class="field-label">Teléfono del cliente (opcional)</label><input type="tel" id="vpTelefono" placeholder="0412-0000000">
-    <label class="field-label">Nombre del cliente (opcional)</label><input type="text" id="vpNombre">
+    <label class="field-label">Teléfono del cliente (opcional)</label><input type="tel" id="vpTelefono" placeholder="0412-1234567">
+    <label class="field-label">Nombre del cliente (opcional)</label><input type="text" id="vpNombre" data-cap="nombre">
     <label class="field-label">Método de pago</label>
     <select id="vpMetodo"><option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="zelle">Zelle</option><option value="credito">Crédito (a la cuenta del cliente)</option></select>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
@@ -1189,7 +1243,7 @@ function abrirModalServicioJSON(s){ modalServicio(s); }
 function modalServicio(s){
   s = s || {};
   abrirModal(s.id?'Editar servicio':'Nuevo servicio', `
-    <label class="field-label">Nombre del servicio</label><input type="text" id="svNombre" value="${esc(s.nombre||'')}" placeholder="Lavado completo, básico, motor…">
+    <label class="field-label">Nombre del servicio</label><input type="text" id="svNombre" data-cap="nombre" value="${esc(s.nombre||'')}" placeholder="Lavado completo, básico, motor…">
     <div class="form-row2">
       <div><label class="field-label">Tipo de vehículo</label>
         <select id="svTipo"><option value="carro" ${s.tipo_vehiculo==='carro'?'selected':''}>Carro</option><option value="moto" ${s.tipo_vehiculo==='moto'?'selected':''}>Moto</option><option value="camioneta" ${s.tipo_vehiculo==='camioneta'?'selected':''}>Camioneta</option><option value="otro" ${s.tipo_vehiculo==='otro'?'selected':''}>Otro</option></select></div>
@@ -1404,7 +1458,7 @@ function modalMovimientoCliente(cliente, tipoFijo){
   abrirModal(tipoFijo==='credito'?'Registrar crédito':(tipoFijo==='debito'?'Registrar abono':'Registrar movimiento'), `
     ${cliente?`<div class="chip" style="margin-bottom:10px;">${esc(cliente.nombre||cliente.telefono)}</div>`:`
     <label class="field-label">Teléfono del cliente</label><input type="tel" id="mcTelefono">
-    <label class="field-label">Nombre del cliente</label><input type="text" id="mcNombre">`}
+    <label class="field-label">Nombre del cliente</label><input type="text" id="mcNombre" data-cap="nombre">`}
     ${!tipoFijo?`<label class="field-label">Tipo de movimiento</label>
     <div class="seg-mini"><button type="button" class="active" data-tipo="credito">Crédito (debe)</button><button type="button" data-tipo="debito">Abono (paga)</button></div>`:''}
     <label class="field-label">Monto (USD)</label><input type="number" step="0.01" id="mcMonto">
@@ -1484,7 +1538,7 @@ async function ajustarFidelidad(id, campo, delta){
 function modalNuevaTarjeta(){
   abrirModal('Nueva tarjeta de fidelidad', `
     <label class="field-label">Teléfono del cliente</label><input type="tel" id="tfTelefono">
-    <label class="field-label">Nombre del cliente</label><input type="text" id="tfNombre">
+    <label class="field-label">Nombre del cliente</label><input type="text" id="tfNombre" data-cap="nombre">
     <button class="btn btn-primary btn-block" id="btnGuardarTarjeta" style="margin-top:18px;">Crear tarjeta</button>
   `);
   document.getElementById('btnGuardarTarjeta').addEventListener('click', async function(){
@@ -1546,7 +1600,7 @@ async function modalNuevoSeguro(){
     <label class="field-label">Lavado relacionado (opcional)</label>
     <select id="slLavado"><option value="">— Sin vincular a un lavado —</option>${(lavados||[]).map(l=>`<option value="${l.id}" data-cliente="${l.cliente_id||''}">${esc(l.nombre_cliente)} — ${fmtFechaHora(l.fecha_lavado)}</option>`).join('')}</select>
     <label class="field-label">Teléfono del cliente</label><input type="tel" id="slTelefono">
-    <label class="field-label">Nombre del cliente</label><input type="text" id="slNombre">
+    <label class="field-label">Nombre del cliente</label><input type="text" id="slNombre" data-cap="nombre">
     <label class="field-label">Precio (USD)</label><input type="number" step="0.01" id="slPrecio" value="${CONFIG_GENERAL.precio_seguro_lluvia_usd||1.5}">
     <div class="help-text">Válido por ${CONFIG_GENERAL.horas_seguro_lluvia||48} horas desde el momento del lavado.</div>
     <button class="btn btn-primary btn-block" id="btnGuardarSeguro" style="margin-top:18px;">Registrar seguro</button>
@@ -1743,7 +1797,7 @@ async function renderProveedores(){
 }
 function modalNuevoProveedor(){
   abrirModal('Nuevo proveedor', `
-    <label class="field-label">Nombre</label><input type="text" id="prNombre">
+    <label class="field-label">Nombre</label><input type="text" id="prNombre" data-cap="nombre">
     <label class="field-label">Teléfono</label><input type="tel" id="prTelefono">
     <label class="field-label">Correo (opcional)</label><input type="email" id="prEmail">
     <label class="field-label">Notas (opcional)</label><textarea id="prNotas"></textarea>
@@ -1795,7 +1849,7 @@ async function cambiarActivoUsuario(id, activo){
 }
 function modalNuevoUsuario(){
   abrirModal('Nuevo usuario', `
-    <label class="field-label">Nombre completo</label><input type="text" id="usNombre">
+    <label class="field-label">Nombre completo</label><input type="text" id="usNombre" data-cap="nombre">
     <label class="field-label">Correo</label><input type="email" id="usEmail">
     <label class="field-label">Contraseña temporal</label><input type="text" id="usPass" placeholder="Mínimo 6 caracteres">
     <label class="field-label">Rol</label>
