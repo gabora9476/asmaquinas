@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Máquinas Autoservicios</title>
+<meta name="theme-color" content="#090C0A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="https://i.ibb.co/7dZ9Yw7f/Maquinas-G.png">
+<link rel="apple-touch-icon" href="https://i.ibb.co/7dZ9Yw7f/Maquinas-G.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#090C0A; --bg-2:#0D110E;
+  --ink:#EFF6F1; --ink-soft:#9FB3A6; --ink-faint:#5C6E62;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --glass:rgba(255,255,255,.045); --glass-2:rgba(255,255,255,.075); --glass-strong:rgba(20,26,22,.86);
+  --g1:#22D46B; --g2:#0E9C50; --g-soft:rgba(34,212,107,.16); --g-line:rgba(34,212,107,.35);
+  --amber:#E8B04B; --red:#F2685C; --blue:#4FA0E8;
+  --shadow-glass:inset 0 1px 0 rgba(255,255,255,.10), 0 10px 26px rgba(0,0,0,.45);
+  --ease:cubic-bezier(.32,.72,0,1);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Inter',system-ui,sans-serif; color:var(--ink); min-height:100vh;
+  background:
+    radial-gradient(900px 480px at 15% -8%, rgba(34,212,107,.14), transparent 60%),
+    radial-gradient(700px 420px at 100% 0%, rgba(34,212,107,.07), transparent 55%),
+    var(--bg);
+  -webkit-font-smoothing:antialiased; font-size:13px; position:relative; overflow-x:hidden;
+  display:flex; align-items:center; justify-content:center; padding:26px;
+}
+h1,h2,h3{font-family:'Manrope',system-ui,sans-serif; letter-spacing:-.01em; color:var(--ink);}
+.hidden{display:none !important;}
+input,select,textarea,button{font-family:inherit;}
+::selection{background:var(--g-soft); color:var(--ink);}
+:focus-visible{outline:2px solid var(--g1); outline-offset:2px; border-radius:6px;}
+
+.glass{background:linear-gradient(160deg, var(--glass-2), var(--glass)); backdrop-filter:blur(24px) saturate(160%); -webkit-backdrop-filter:blur(24px) saturate(160%); border:1px solid var(--line); box-shadow:var(--shadow-glass);}
+.glass-strong{background:var(--glass-strong); backdrop-filter:blur(28px) saturate(170%); -webkit-backdrop-filter:blur(28px) saturate(170%); border:1px solid var(--line-2);}
+
+.blob{position:absolute; border-radius:50%; filter:blur(70px); pointer-events:none; opacity:.55; z-index:0;}
+.blob-a{width:420px; height:420px; background:radial-gradient(circle, rgba(34,212,107,.5), transparent 70%); top:-160px; left:-140px; animation:float1 11s ease-in-out infinite;}
+.blob-b{width:360px; height:360px; background:radial-gradient(circle, rgba(79,160,232,.28), transparent 70%); bottom:-160px; right:-120px; animation:float2 13s ease-in-out infinite;}
+@keyframes float1{0%,100%{transform:translate(0,0);} 50%{transform:translate(24px,26px);}}
+@keyframes float2{0%,100%{transform:translate(0,0);} 50%{transform:translate(-20px,-24px);}}
+
+/* ---------- tarjeta de presentación ---------- */
+.biz-card{position:relative; z-index:1; width:100%; max-width:380px; border-radius:28px; padding:38px 26px 30px; text-align:center;}
+.biz-card img{width:104px; margin:0 auto 16px; display:block; filter:drop-shadow(0 8px 20px rgba(34,212,107,.25));}
+.biz-card h1{font-size:19px; margin:0 0 4px; font-weight:800;}
+.biz-card p.tagline{color:var(--ink-soft); font-size:12.5px; margin:0 0 26px;}
+
+.stack-btns{display:flex; flex-direction:column; gap:10px; margin-bottom:22px;}
+.btn{position:relative; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; cursor:pointer; text-decoration:none; font-weight:700; font-size:13.5px; padding:13px 18px; border-radius:999px; transition:transform .15s var(--ease), opacity .15s; user-select:none;}
+.btn:active{transform:scale(.965);}
+.btn:disabled{opacity:.55; cursor:default;}
+.btn svg{width:16px;height:16px;flex-shrink:0;}
+.btn-primary{color:#04150B; background:linear-gradient(180deg, var(--g1), var(--g2)); box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 8px 20px rgba(14,156,80,.32);}
+.btn-glass{background:linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03)); backdrop-filter:blur(16px); color:var(--ink); border:1px solid var(--line-2); box-shadow:inset 0 1px 0 rgba(255,255,255,.14);}
+.btn-block{width:100%;}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.social-row{display:flex; justify-content:center; gap:10px;}
+.social-btn{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);text-decoration:none;border:1px solid var(--line-2); transition:color .15s, border-color .15s;}
+.social-btn svg{width:17px;height:17px;}
+.social-btn:hover{color:var(--g1); border-color:var(--g-line);}
+
+.foot{position:relative; z-index:1; text-align:center; margin-top:16px;}
+.powered{font-size:11px; color:var(--ink-faint);}
+.powered a{color:var(--g1); text-decoration:none; font-weight:700;}
+.powered a:hover{text-decoration:underline;}
+
+/* ---------- modal de la cita ---------- */
+.modal-overlay{position:fixed; inset:0; background:rgba(4,10,7,.6); backdrop-filter:blur(4px); z-index:60; display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .25s var(--ease);}
+.modal-overlay.show{opacity:1; pointer-events:auto;}
+@media(min-width:640px){ .modal-overlay{align-items:center;} }
+.modal-box{width:100%; max-width:440px; max-height:88vh; overflow-y:auto; border-radius:26px 26px 0 0; padding:20px 22px calc(env(safe-area-inset-bottom,0px) + 22px); transform:translateY(100%); transition:transform .38s var(--ease);}
+@media(min-width:640px){ .modal-box{border-radius:24px; transform:translateY(24px) scale(.97); opacity:0;} }
+.modal-overlay.show .modal-box{transform:translateY(0) scale(1); opacity:1;}
+.modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;}
+.modal-head h3{font-size:15.5px; margin:0; font-weight:800;}
+.modal-close{width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-soft); flex-shrink:0;}
+.modal-close svg{width:14px;height:14px;}
+.modal-sub{font-size:11.5px; color:var(--ink-soft); margin:0 0 14px; line-height:1.5;}
+
+.field-label{display:block; font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 7px; text-transform:uppercase; letter-spacing:.4px;}
+input[type=text],input[type=tel],input[type=date],input[type=time],select,textarea{
+  width:100%; padding:12px 14px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.04);
+  font-size:13.5px; color:var(--ink); outline:none; transition:border .15s, box-shadow .15s; appearance:none;
+}
+select{background-image:none;}
+textarea{resize:vertical; min-height:64px;}
+input::placeholder,textarea::placeholder{color:var(--ink-faint);}
+input:focus,select:focus,textarea:focus{border-color:var(--g1); box-shadow:0 0 0 3px var(--g-soft);}
+.form-row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+.badge{display:inline-block; padding:3px 9px; border-radius:99px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.3px;}
+.b-vigente{background:var(--g-soft); color:var(--g1);}
+.b-usado{background:rgba(79,160,232,.16); color:var(--blue);}
+.b-vencido{background:rgba(232,176,75,.16); color:var(--amber);}
+
+.benefit-box{border-radius:18px; padding:14px 15px; margin:4px 0 6px; border-left:3px solid var(--g-line);}
+.benefit-box .t1{font-weight:700; font-size:12.5px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;}
+.benefit-box .t2{font-size:11px; color:var(--ink-soft); margin-top:4px; line-height:1.5;}
+.progress-bar{width:100%; height:7px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden; margin:9px 0 2px;}
+.progress-bar .fill{height:100%; background:linear-gradient(90deg,var(--g1),var(--g2)); border-radius:99px; transition:width .4s var(--ease);}
+.chip{display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:99px; background:rgba(255,255,255,.06); border:1px solid var(--line); font-size:10.5px; font-weight:700; color:var(--g1); white-space:nowrap;}
+.lookup-note{font-size:11.5px; color:var(--ink-faint); display:flex; align-items:center; gap:6px; margin:6px 0 2px;}
+
+.success-box{text-align:center; padding:14px 4px 4px;}
+.success-box .ic{width:52px;height:52px;border-radius:50%;background:var(--g-soft);color:var(--g1);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+.success-box .ic svg{width:24px;height:24px;}
+.success-box h3{font-size:15px;margin:0 0 6px;font-weight:800;}
+.success-box p{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 18px;}
+
+.toast{position:fixed; top:calc(env(safe-area-inset-top,0px) + 14px); left:50%; transform:translateX(-50%) translateY(-140%); z-index:90; background:#161B18; color:#fff; padding:12px 18px; border-radius:14px; font-size:12.5px; font-weight:600; box-shadow:0 12px 32px rgba(0,0,0,.4); display:flex; align-items:center; gap:8px; transition:transform .35s var(--ease); max-width:88vw; border:1px solid var(--line-2);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast svg{width:15px;height:15px;flex-shrink:0; color:var(--g1);}
+.toast.err svg{color:var(--red);}
+.toast.err{border-color:rgba(242,104,92,.3);}
+#avisoConexion{position:fixed;top:0;left:0;right:0;z-index:9999;background:#8A2E23;color:#fff;text-align:center;padding:10px 16px;font-size:12px;font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="blob blob-a"></div>
+<div class="blob blob-b"></div>
+
+<div class="biz-card glass">
+  <img src="https://i.ibb.co/7dZ9Yw7f/Maquinas-G.png" alt="Máquinas Autoservicios">
+  <h1>Máquinas Autoservicios</h1>
+  <p class="tagline">Lavado y cuidado profesional para tu vehículo</p>
+
+  <div class="stack-btns">
+    <button class="btn btn-primary btn-block" id="btnAgendar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      Agendar cita
+    </button>
+    <a class="btn btn-glass btn-block" id="btnChat" href="#" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5 5.6 15.7A8 8 0 1 1 8.7 18.9L4.5 19.5Z"/></svg>
+      Chat directo por WhatsApp
+    </a>
+    <a class="btn btn-glass btn-block" id="btnGuardar" href="#" download="Maquinas-Autoservicios.vcf">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.7 20c.8-3.4 3.3-5.4 6.3-5.4s5.5 2 6.3 5.4"/><circle cx="9" cy="8" r="3.3"/><path d="M18.5 8.5v5M16 11h5"/></svg>
+      Guardar nuestro número
+    </a>
+  </div>
+
+  <div class="social-row" id="socialRow"></div>
+</div>
+
+<div class="foot">
+  <div class="powered" id="poweredBy"></div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* =====================================================================
+   SUPABASE — mismo proyecto que el panel administrativo
+===================================================================== */
+const SUPABASE_URL = 'https://tdzjbdaaztrtnlvhxpku.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_BMTr2JTn0BWPVcxsB0V27g_v8YkUmyC';
+
+function mostrarAvisoConexion(){
+  if(document.getElementById('avisoConexion')) return;
+  var b = document.createElement('div');
+  b.id = 'avisoConexion';
+  b.textContent = 'No se pudo conectar con el servidor. Revisa tu conexión a internet o desactiva bloqueadores de anuncios y recarga la página.';
+  document.body.prepend(b);
+}
+function crearClienteSeguro(opts){
+  try{
+    if(!window.supabase || typeof window.supabase.createClient !== 'function') throw new Error('La librería de Supabase no cargó');
+    return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, opts||{});
+  }catch(e){
+    console.error('No se pudo inicializar Supabase:', e);
+    mostrarAvisoConexion();
+    var respuestaError = { data:null, error:{ message:'Sin conexión con el servidor' } };
+    function cadenaSegura(){
+      return new Proxy(function(){}, { get:function(t,p){
+        if(p==='then') return function(resolve){ resolve(respuestaError); };
+        if(p==='catch') return function(){ return Promise.resolve(respuestaError); };
+        return cadenaSegura();
+      }, apply:function(){ return cadenaSegura(); } });
+    }
+    return new Proxy({}, { get:function(){ return function(){ return cadenaSegura(); }; } });
+  }
+}
+const sb = crearClienteSeguro({auth:{persistSession:false}});
+
+/* =====================================================================
+   HELPERS
+===================================================================== */
+function mensajeError(err, fallback){ return (err && err.message) ? err.message : (fallback||'error desconocido'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function capitalizar(s){ return String(s||'').trim().split(/\s+/).map(w=>w? w[0].toUpperCase()+w.slice(1).toLowerCase():w).join(' '); }
+function fmtUsd(n){ return '$' + (Number(n)||0).toFixed(2); }
+function hoy(){ return new Date().toISOString().slice(0,10); }
+function fmtFecha(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('es-VE',{day:'2-digit',month:'short',year:'numeric'}); }
+function fmtFechaHora(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleString('es-VE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+function labelTipoVeh(t){ return {moto:'Moto',carro:'Carro',camioneta:'Camioneta',otro:'Otro'}[t]||t||''; }
+function soloDigitos(s){ return String(s||'').replace(/\D/g,''); }
+
+function capitalizarLive(s){ return s.replace(/\S+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()); }
+function normalizarTelefonoVE(raw){
+  let v = String(raw||'').replace(/[^\d+]/g,'').replace(/(?!^)\+/g,'');
+  let digits = v.replace(/\+/g,'');
+  if(digits.startsWith('58')) digits = digits.slice(2);
+  else if(digits.startsWith('0')) digits = digits.slice(1);
+  digits = digits.slice(0,10);
+  if(digits.length===0) return '';
+  if(digits.length<=3) return '+58 '+digits;
+  return '+58 '+digits.slice(0,3)+digits.slice(3);
+}
+function telefonoAWhatsapp(tel){
+  let d = soloDigitos(tel);
+  if(d.startsWith('58')) return d;
+  if(d.startsWith('0')) return '58'+d.slice(1);
+  return '58'+d;
+}
+document.addEventListener('input', function(e){
+  var el = e.target;
+  if(!el || !el.tagName) return;
+  if(el.tagName==='INPUT' && el.type==='tel'){
+    var v = normalizarTelefonoVE(el.value);
+    el.value = v; el.setSelectionRange(v.length, v.length);
+    if(el.id==='cTelefono') onTelefonoInput(v);
+  } else if(el.dataset && el.dataset.cap==='nombre'){
+    var pos = el.selectionStart;
+    el.value = capitalizarLive(el.value);
+    el.setSelectionRange(pos, pos);
+  }
+});
+
+let toastTimer=null;
+function toast(msg, isErr){
+  var t = document.getElementById('toast');
+  t.innerHTML = (isErr
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>')
+    + '<span>'+esc(msg)+'</span>';
+  t.className = 'toast show' + (isErr?' err':'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.className='toast'; }, 3200);
+}
+
+/* =====================================================================
+   CONFIGURACIÓN GENERAL — redes sociales, WhatsApp del negocio, precios
+===================================================================== */
+const WHATSAPP_DEFECTO = '+584125552525'; // se usa si no hay uno configurado en el panel
+let CONFIG_GENERAL = { precio_seguro_lluvia_usd:1.5, horas_seguro_lluvia:48, umbral_fidelidad_sellos:6 };
+let SERVICIOS_ACTIVOS = [];
+
+const SOCIAL_ICONS = {
+  instagram:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none"/></svg>',
+  facebook:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.3"/><path d="M15 8.5h-1.6a1.6 1.6 0 0 0-1.6 1.6V13H9v3h2.8v5h3v-5h2.1l.5-3h-2.6v-1.7c0-.5.3-.8.8-.8H15V8.5Z"/></svg>',
+  tiktok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.2a3.6 3.6 0 1 1-3-3.55"/><path d="M14 4c.3 2 1.9 3.6 4 3.9"/></svg>'
+};
+function urlRedSocial(tipo, valor){
+  if(!valor) return null;
+  valor = String(valor).trim();
+  if(/^https?:\/\//i.test(valor)) return valor;
+  const user = valor.replace(/^@/,'');
+  if(tipo==='instagram') return 'https://instagram.com/'+user;
+  if(tipo==='facebook') return 'https://facebook.com/'+user;
+  if(tipo==='tiktok') return 'https://tiktok.com/@'+user;
+  return null;
+}
+function generarVCardHref(nombre, numero){
+  const tel = '+' + soloDigitos(numero);
+  const vcard = ['BEGIN:VCARD','VERSION:3.0','FN:'+nombre,'TEL;TYPE=CELL:'+tel,'END:VCARD'].join('\r\n');
+  return 'data:text/vcard;charset=utf-8,' + encodeURIComponent(vcard);
+}
+function pintarTarjeta(){
+  // Redes sociales (cada botón abre su propia app/servicio)
+  const redes = [
+    {tipo:'instagram', valor: CONFIG_GENERAL.instagram_negocio},
+    {tipo:'facebook', valor: CONFIG_GENERAL.facebook_negocio},
+    {tipo:'tiktok', valor: CONFIG_GENERAL.tiktok_negocio}
+  ].map(r=> Object.assign(r,{url:urlRedSocial(r.tipo,r.valor)})).filter(r=>r.url);
+  const row = document.getElementById('socialRow');
+  row.innerHTML = redes.map(r=>`<a class="social-btn" href="${esc(r.url)}" target="_blank" rel="noopener">${SOCIAL_ICONS[r.tipo]}</a>`).join('');
+
+  // WhatsApp del negocio: chat directo + guardar contacto
+  const numeroNegocio = CONFIG_GENERAL.whatsapp_negocio || WHATSAPP_DEFECTO;
+  document.getElementById('btnChat').href = 'https://wa.me/' + telefonoAWhatsapp(numeroNegocio);
+  document.getElementById('btnGuardar').href = generarVCardHref('Máquinas Autoservicios', numeroNegocio);
+
+  // Powered by (firma del desarrollador, número fijo)
+  document.getElementById('poweredBy').innerHTML = 'Powered by: <a href="https://wa.me/584228745777" target="_blank" rel="noopener">gabora646</a>';
+}
+
+async function cargarConfigYServicios(){
+  const {data: cfg} = await sb.from('config_general').select('*').eq('id',1).single();
+  if(cfg) CONFIG_GENERAL = cfg;
+  pintarTarjeta();
+  const {data: servicios} = await sb.from('servicios').select('*').eq('activo', true).order('nombre');
+  SERVICIOS_ACTIVOS = servicios || [];
+}
+cargarConfigYServicios();
+
+/* =====================================================================
+   MODAL: AGENDAR CITA (solo se abre al presionar el botón)
+===================================================================== */
+document.getElementById('btnAgendar').addEventListener('click', abrirModalCita);
+
+function abrirModalCita(){
+  const root = document.getElementById('modalRoot');
+  const opcionesServicio = SERVICIOS_ACTIVOS.map(s=>`<option value="${s.id}">${esc(s.nombre)} (${labelTipoVeh(s.tipo_vehiculo)})</option>`).join('');
+  root.innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box glass-strong">
+        <div class="modal-head"><h3>Agendar cita</h3><button class="modal-close" id="modalCloseBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button></div>
+        <div id="citaFormWrap">
+          <p class="modal-sub">Escribe tu número de teléfono: si ya eres cliente, verás tus sellos de fidelidad y tu seguro de lluvia automáticamente.</p>
+
+          <label class="field-label" style="margin-top:0;">Tu teléfono</label>
+          <input type="tel" id="cTelefono" placeholder="0412-1234567" autocomplete="tel">
+          <div class="lookup-note hidden" id="lookupLoading">Buscando tu historial…</div>
+          <div id="beneficiosBox"></div>
+
+          <label class="field-label">Tu nombre y apellido</label>
+          <input type="text" id="cNombre" data-cap="nombre" placeholder="Nombre completo">
+
+          <div class="form-row2">
+            <div><label class="field-label">Tipo de vehículo</label>
+              <select id="cTipo"><option value="carro">Carro</option><option value="moto">Moto</option><option value="camioneta">Camioneta</option><option value="otro">Otro</option></select></div>
+            <div><label class="field-label">Placa (opcional)</label><input type="text" id="cPlaca"></div>
+          </div>
+
+          <label class="field-label">Servicio (opcional)</label>
+          <select id="cServicio"><option value="">— Por definir —</option>${opcionesServicio}</select>
+
+          <div class="form-row2">
+            <div><label class="field-label">Fecha</label><input type="date" id="cFecha" value="${hoy()}"></div>
+            <div><label class="field-label">Hora</label><input type="time" id="cHora"></div>
+          </div>
+
+          <label class="field-label">Notas (opcional)</label>
+          <textarea id="cNotas" placeholder="Algo que debamos saber…"></textarea>
+
+          <button class="btn btn-primary btn-block" id="btnApartar" style="margin-top:20px;">Apartar cita</button>
+        </div>
+        <div id="citaSuccessWrap" class="hidden"></div>
+      </div>
+    </div>`;
+  requestAnimationFrame(()=> document.getElementById('modalOverlay').classList.add('show'));
+  document.getElementById('modalCloseBtn').addEventListener('click', cerrarModalCita);
+  document.getElementById('modalOverlay').addEventListener('click', function(e){ if(e.target.id==='modalOverlay') cerrarModalCita(); });
+  document.getElementById('btnApartar').addEventListener('click', enviarCita);
+}
+function cerrarModalCita(){
+  const ov = document.getElementById('modalOverlay'); if(!ov) return;
+  ov.classList.remove('show');
+  setTimeout(()=>{ document.getElementById('modalRoot').innerHTML=''; }, 250);
+}
+
+/* =====================================================================
+   BENEFICIOS DEL CLIENTE — sellos de fidelidad + seguro de lluvia
+===================================================================== */
+let lookupTimer = null;
+function onTelefonoInput(valorNormalizado){
+  clearTimeout(lookupTimer);
+  const box = document.getElementById('beneficiosBox');
+  const loading = document.getElementById('lookupLoading');
+  if(!box || !loading) return;
+  if(soloDigitos(valorNormalizado).length < 10){ box.innerHTML=''; loading.classList.add('hidden'); return; }
+  loading.classList.remove('hidden');
+  lookupTimer = setTimeout(()=> buscarBeneficios(valorNormalizado), 450);
+}
+async function buscarBeneficios(telefono){
+  const box = document.getElementById('beneficiosBox');
+  const loading = document.getElementById('lookupLoading');
+  if(!box || !loading) return;
+  try{
+    const {data: cliente, error} = await sb.from('clientes').select('id,nombre,telefono').eq('telefono', telefono).maybeSingle();
+    loading.classList.add('hidden');
+    if(error || !cliente){ box.innerHTML=''; return; }
+
+    let html = '';
+    const umbral = CONFIG_GENERAL.umbral_fidelidad_sellos || 6;
+    const {data: tarjeta} = await sb.from('tarjetas_fidelidad').select('*').eq('cliente_id', cliente.id).maybeSingle();
+    if(tarjeta){
+      const pct = Math.min(100, Math.round(((tarjeta.sellos||0)/umbral)*100));
+      html += `<div class="benefit-box glass">
+        <div class="t1"><span>💎 Sellos de fidelidad</span>${tarjeta.lavados_gratis_disponibles>0?`<span class="chip">${tarjeta.lavados_gratis_disponibles} lavado(s) gratis</span>`:''}</div>
+        <div class="t2">${tarjeta.sellos||0} de ${umbral} sellos para tu próximo lavado gratis</div>
+        <div class="progress-bar"><div class="fill" style="width:${pct}%;"></div></div>
+      </div>`;
+    }
+
+    const {data: seguros} = await sb.from('seguros_lluvia').select('*').eq('cliente_id', cliente.id).order('fecha_lavado',{ascending:false}).limit(1);
+    const seguro = (seguros||[])[0];
+    if(seguro){
+      const ahora = new Date();
+      const estado = seguro.usado ? 'usado' : (new Date(seguro.vence_at) < ahora ? 'vencido' : 'vigente');
+      const label = {vigente:'Vigente', usado:'Usado', vencido:'Vencido'}[estado];
+      html += `<div class="benefit-box glass">
+        <div class="t1"><span>☔ Seguro de lluvia</span><span class="badge b-${estado}">${label}</span></div>
+        <div class="t2">${estado==='vigente' ? 'Válido hasta ' + fmtFechaHora(seguro.vence_at) : (estado==='usado' ? 'Usado el ' + fmtFechaHora(seguro.fecha_uso) : 'Venció el ' + fmtFechaHora(seguro.vence_at))} · ${fmtUsd(seguro.precio_usd)}</div>
+      </div>`;
+    }
+    box.innerHTML = html;
+    const campoNombre = document.getElementById('cNombre');
+    if(cliente.nombre && campoNombre && !campoNombre.value.trim()) campoNombre.value = cliente.nombre;
+  }catch(e){
+    loading.classList.add('hidden');
+    console.error(e);
+  }
+}
+
+/* =====================================================================
+   CLIENTES — buscar o crear por teléfono (mismo criterio que el panel)
+===================================================================== */
+async function buscarOCrearCliente(telefono, nombre){
+  telefono = String(telefono||'').trim();
+  if(!telefono) return {data:null, error:{message:'El teléfono es obligatorio'}};
+  const {data: existente} = await sb.from('clientes').select('*').eq('telefono', telefono).maybeSingle();
+  if(existente){
+    if(nombre && !existente.nombre){ await sb.from('clientes').update({nombre: capitalizar(nombre)}).eq('id', existente.id); existente.nombre = capitalizar(nombre); }
+    return {data: existente, error: null};
+  }
+  const {data, error} = await sb.from('clientes').insert({telefono, nombre: nombre?capitalizar(nombre):null}).select().single();
+  return {data, error};
+}
+
+/* =====================================================================
+   ENVIAR CITA — queda visible en el panel administrativo (tabla citas)
+===================================================================== */
+async function enviarCita(){
+  const btn = document.getElementById('btnApartar');
+  const telefono = document.getElementById('cTelefono').value.trim();
+  const nombre = document.getElementById('cNombre').value.trim();
+  const fecha = document.getElementById('cFecha').value;
+  const horaInput = document.getElementById('cHora').value;
+  if(soloDigitos(telefono).length < 12){ toast('Escribe un número de teléfono válido', true); return; }
+  if(!nombre){ toast('Escribe tu nombre y apellido', true); return; }
+  if(!fecha || !horaInput){ toast('Selecciona la fecha y la hora', true); return; }
+
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Apartando…';
+  const {data: cliente, error: errCliente} = await buscarOCrearCliente(telefono, nombre);
+  if(errCliente){ toast('No se pudo registrar tus datos: '+mensajeError(errCliente), true); btn.disabled=false; btn.innerHTML='Apartar cita'; return; }
+
+  const {error} = await sb.from('citas').insert({
+    cliente_id: cliente.id,
+    nombre_cliente: capitalizar(nombre),
+    telefono,
+    servicio_id: document.getElementById('cServicio').value || null,
+    tipo_vehiculo: document.getElementById('cTipo').value,
+    placa: document.getElementById('cPlaca').value.trim() || null,
+    modalidad: 'local',
+    fecha, hora: horaInput,
+    notas: document.getElementById('cNotas').value.trim() || null
+  });
+  if(error){ toast('No se pudo apartar la cita: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Apartar cita'; return; }
+
+  document.getElementById('citaFormWrap').classList.add('hidden');
+  const suc = document.getElementById('citaSuccessWrap');
+  suc.classList.remove('hidden');
+  suc.innerHTML = `<div class="success-box">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></div>
+    <h3>¡Cita apartada!</h3>
+    <p>Te esperamos el ${fmtFecha(fecha)} a las ${esc(horaInput)}. Guarda tu número de teléfono para consultar tus beneficios la próxima vez.</p>
+    <button class="btn btn-glass btn-block" id="btnCerrarSuccess">Cerrar</button>
+  </div>`;
+  document.getElementById('btnCerrarSuccess').addEventListener('click', cerrarModalCita);
+  toast('¡Tu cita quedó apartada!');
+}
+</script>
+</body>
+</html>
