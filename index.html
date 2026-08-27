@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Panel · Máquinas Autoservicios</title>
+<meta name="theme-color" content="#090C0A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="https://i.ibb.co/7dZ9Yw7f/Maquinas-G.png">
+<link rel="apple-touch-icon" href="https://i.ibb.co/7dZ9Yw7f/Maquinas-G.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#090C0A; --bg-2:#0D110E; --bg-glow:#0F1C14;
+  --ink:#EFF6F1; --ink-soft:#9FB3A6; --ink-faint:#5C6E62;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --glass:rgba(255,255,255,.045); --glass-2:rgba(255,255,255,.075); --glass-strong:rgba(20,26,22,.82);
+  --g1:#22D46B; --g2:#0E9C50; --g-soft:rgba(34,212,107,.16); --g-line:rgba(34,212,107,.35);
+  --amber:#E8B04B; --red:#F2685C; --blue:#4FA0E8;
+  --shadow-glass:inset 0 1px 0 rgba(255,255,255,.10), 0 10px 26px rgba(0,0,0,.45);
+  --shadow-pop:0 18px 44px rgba(0,0,0,.55);
+  --ease:cubic-bezier(.32,.72,0,1);
+  --sidebar-w:242px; --radius:18px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Inter',system-ui,sans-serif; color:var(--ink); min-height:100vh;
+  background:
+    radial-gradient(900px 480px at 15% -8%, rgba(34,212,107,.14), transparent 60%),
+    radial-gradient(700px 420px at 100% 0%, rgba(34,212,107,.07), transparent 55%),
+    var(--bg);
+  -webkit-font-smoothing:antialiased; font-size:13px;
+}
+h1,h2,h3,.display{font-family:'Manrope',system-ui,sans-serif; letter-spacing:-.01em; color:var(--ink);}
+.mono{font-family:'JetBrains Mono',monospace;}
+.hidden{display:none !important;}
+input,select,textarea,button{font-family:inherit;}
+::selection{background:var(--g-soft); color:var(--ink);}
+::-webkit-scrollbar{width:7px; height:7px;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14); border-radius:99px;}
+:focus-visible{outline:2px solid var(--g1); outline-offset:2px; border-radius:6px;}
+
+/* ---------- vidrio líquido ---------- */
+.glass{
+  background:linear-gradient(160deg, var(--glass-2), var(--glass));
+  backdrop-filter:blur(24px) saturate(160%); -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border:1px solid var(--line); box-shadow:var(--shadow-glass);
+}
+.glass-solid{background:var(--glass-strong); backdrop-filter:blur(28px) saturate(170%); -webkit-backdrop-filter:blur(28px) saturate(170%); border:1px solid var(--line-2);}
+
+/* ---------- login ---------- */
+#viewLogin{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:26px; position:relative; overflow:hidden;}
+.blob{position:absolute; border-radius:50%; filter:blur(70px); pointer-events:none; opacity:.55;}
+.blob-a{width:420px; height:420px; background:radial-gradient(circle, rgba(34,212,107,.5), transparent 70%); top:-160px; left:-140px; animation:float1 11s ease-in-out infinite;}
+.blob-b{width:360px; height:360px; background:radial-gradient(circle, rgba(79,160,232,.28), transparent 70%); bottom:-160px; right:-120px; animation:float2 13s ease-in-out infinite;}
+@keyframes float1{0%,100%{transform:translate(0,0);} 50%{transform:translate(24px,26px);}}
+@keyframes float2{0%,100%{transform:translate(0,0);} 50%{transform:translate(-20px,-24px);}}
+.login-card{position:relative; z-index:1; width:100%; max-width:378px; border-radius:28px; padding:36px 26px; text-align:center;}
+.login-card img{width:120px; margin:0 auto 16px; display:block; filter:drop-shadow(0 8px 20px rgba(34,212,107,.25));}
+.login-card h1{font-size:19px; margin:0 0 4px; font-weight:800;}
+.login-card p{color:var(--ink-soft); font-size:12.5px; margin:0 0 22px;}
+.field-label{display:block; font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 7px; text-align:left; text-transform:uppercase; letter-spacing:.4px;}
+input[type=text],input[type=tel],input[type=date],input[type=time],input[type=number],input[type=email],input[type=password],select,textarea{
+  width:100%; padding:12px 14px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.04);
+  font-size:13.5px; color:var(--ink); outline:none; transition:border .15s, box-shadow .15s; appearance:none;
+}
+select{background-image:none;}
+textarea{resize:vertical; min-height:64px;}
+input::placeholder,textarea::placeholder{color:var(--ink-faint);}
+input:focus,select:focus,textarea:focus{border-color:var(--g1); box-shadow:0 0 0 3px var(--g-soft);}
+#loginError{color:var(--red); font-size:12px; font-weight:600; margin-top:10px; min-height:16px;}
+.pw-wrap{position:relative;}
+.pw-wrap button{position:absolute; right:6px; top:6px; bottom:6px; background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:0 8px;}
+.pw-wrap button svg{width:16px;height:16px;}
+
+/* ---------- botones estilo iOS / vidrio líquido ---------- */
+.btn{position:relative; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:7px; border:none; cursor:pointer; font-weight:700; font-size:13px; padding:11px 18px; border-radius:999px; transition:transform .15s var(--ease), opacity .15s; -webkit-user-select:none; user-select:none;}
+.btn:active{transform:scale(.965);}
+.btn:disabled{opacity:.55; cursor:default;}
+.btn svg{width:15px;height:15px;flex-shrink:0;}
+.btn-primary{color:#04150B; background:linear-gradient(180deg, var(--g1), var(--g2)); box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 8px 20px rgba(14,156,80,.32);}
+.btn-block{width:100%;}
+.btn-glass{background:linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03)); backdrop-filter:blur(16px); color:var(--ink); border:1px solid var(--line-2); box-shadow:inset 0 1px 0 rgba(255,255,255,.14);}
+.btn-ghost{background:transparent; color:var(--ink-soft); box-shadow:none; padding:9px 11px;}
+.btn-danger{background:rgba(242,104,92,.14); color:#FF9C8F; border:1px solid rgba(242,104,92,.28);}
+.btn-sm{padding:8px 13px; font-size:12px; border-radius:12px;}
+.btn-icon{width:36px;height:36px;padding:0;border-radius:50%;}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ---------- shell de la app ---------- */
+#viewApp{display:none; min-height:100vh;}
+#viewApp.show{display:block;}
+.app-frame{display:flex; min-height:100vh;}
+
+.sidebar{width:var(--sidebar-w); flex-shrink:0; display:none; flex-direction:column; padding:20px 13px; position:sticky; top:0; height:100vh; border-right:1px solid var(--line);}
+.sidebar-logo{display:flex; align-items:center; gap:10px; padding:6px 8px 20px;}
+.sidebar-logo img{width:32px; height:32px; object-fit:contain;}
+.sidebar-logo span{font-family:'Manrope'; font-weight:800; font-size:13.5px; line-height:1.2;}
+.nav-group-label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:var(--ink-faint); padding:14px 12px 6px;}
+.nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:13px; color:var(--ink-soft); text-decoration:none; font-size:13px; font-weight:600; cursor:pointer; margin-bottom:2px; border:none; background:none; width:100%; text-align:left; position:relative;}
+.nav-item svg{width:17px;height:17px; flex-shrink:0;}
+.nav-item.active{background:var(--g-soft); color:var(--g1);}
+.nav-item:hover:not(.active){background:rgba(255,255,255,.045); color:var(--ink);}
+.sidebar-foot{margin-top:auto; padding:12px 4px 0; border-top:1px solid var(--line);}
+.sidebar-user{display:flex; align-items:center; gap:9px; padding:10px 6px;}
+.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(160deg,var(--g1),var(--g2));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#04150B;flex-shrink:0;}
+.sidebar-user .u1{font-size:12px; font-weight:700; line-height:1.3;}
+.sidebar-user .u2{font-size:10.5px; color:var(--ink-faint); text-transform:capitalize;}
+
+.main-col{flex:1; min-width:0; display:flex; flex-direction:column;}
+.topbar{position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; border-bottom:1px solid var(--line); background:rgba(9,12,10,.72); backdrop-filter:blur(20px);}
+.topbar h1{font-size:16.5px; margin:0; font-weight:800;}
+.topbar-right{display:flex; align-items:center; gap:8px;}
+
+.content{padding:16px 16px calc(104px + env(safe-area-inset-bottom,0px));}
+@media(min-width:900px){ .sidebar{display:flex;} .content{padding:26px 32px 44px;} }
+
+/* ---------- dock inferior móvil ---------- */
+.dock-wrap{position:fixed; left:0; right:0; bottom:0; z-index:30; display:flex; justify-content:center; padding:0 14px calc(env(safe-area-inset-bottom,0px) + 14px); pointer-events:none;}
+@media(min-width:900px){ .dock-wrap{display:none;} }
+.dock{pointer-events:auto; display:flex; gap:2px; padding:7px; border-radius:26px; background:linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.03)); backdrop-filter:blur(26px) saturate(180%); -webkit-backdrop-filter:blur(26px) saturate(180%); border:1px solid var(--line-2); box-shadow:0 16px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.14); max-width:420px; width:100%;}
+.dock-item{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:9px 2px 8px; background:none; border:none; color:var(--ink-faint); cursor:pointer; border-radius:19px; position:relative;}
+.dock-item svg{width:20px;height:20px;}
+.dock-item span{font-size:9.5px; font-weight:700;}
+.dock-item.active{color:var(--g1); background:var(--g-soft);}
+
+/* ---------- sheet inferior (Más / detalle) ---------- */
+.sheet-overlay{position:fixed; inset:0; background:rgba(4,10,7,.55); backdrop-filter:blur(4px); z-index:60; display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .25s var(--ease);}
+.sheet-overlay.show{opacity:1; pointer-events:auto;}
+@media(min-width:640px){ .sheet-overlay{align-items:center;} }
+.sheet-box{width:100%; max-width:440px; max-height:86vh; overflow-y:auto; border-radius:26px 26px 0 0; padding:18px 20px calc(env(safe-area-inset-bottom,0px) + 20px); transform:translateY(100%); transition:transform .38s var(--ease);}
+@media(min-width:640px){ .sheet-box{border-radius:24px; transform:translateY(24px) scale(.97); opacity:0;} }
+.sheet-overlay.show .sheet-box{transform:translateY(0) scale(1); opacity:1;}
+.sheet-grab{width:38px;height:4px;border-radius:99px;background:rgba(255,255,255,.18); margin:0 auto 14px;}
+.sheet-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+.sheet-head h3{font-size:15.5px; margin:0; font-weight:800;}
+.modal-close{width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-soft);}
+.modal-close svg{width:14px;height:14px;}
+.sheet-nav-item{display:flex; align-items:center; gap:12px; padding:12px 8px; border-radius:14px; color:var(--ink); background:none; border:none; width:100%; text-align:left; font-size:13.5px; font-weight:600; cursor:pointer;}
+.sheet-nav-item svg{width:19px;height:19px; color:var(--g1);}
+.sheet-nav-item:active{background:rgba(255,255,255,.05);}
+
+/* ---------- stat cards ---------- */
+.stat-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:20px;}
+@media(min-width:640px){ .stat-grid{grid-template-columns:repeat(4,1fr);} }
+.stat-card{border-radius:20px; padding:15px;}
+.stat-card .ic{width:30px;height:30px;border-radius:10px; display:flex; align-items:center; justify-content:center; background:var(--g-soft); color:var(--g1); margin-bottom:9px;}
+.stat-card .ic svg{width:15px;height:15px;}
+.stat-card .val{font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700;}
+.stat-card .lbl{font-size:10.5px; color:var(--ink-soft); font-weight:600; margin-top:2px;}
+
+/* ---------- listas / secciones ---------- */
+.section-head{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:13px;}
+.section-head h2{font-size:15.5px; margin:0; font-weight:800;}
+.tabs-row{display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:2px;}
+.tab-btn{flex-shrink:0; padding:8px 15px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.03); color:var(--ink-soft); font-weight:700; font-size:12px; cursor:pointer;}
+.tab-btn.active{border-color:var(--g-line); background:var(--g-soft); color:var(--g1);}
+.filters-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;}
+.filters-row select, .filters-row input{width:auto; min-width:128px; padding:9px 12px; font-size:12px; border-radius:12px;}
+
+.card-list{display:flex; flex-direction:column; gap:9px;}
+.item-row{border-radius:17px; padding:13px 15px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-left:3px solid var(--ink-faint);}
+.item-row.st-pendiente,.item-row.st-vencida{border-left-color:var(--amber);}
+.item-row.st-confirmada,.item-row.st-en_proceso,.item-row.st-parcial{border-left-color:var(--blue);}
+.item-row.st-completada,.item-row.st-completado,.item-row.st-pagada{border-left-color:var(--g1);}
+.item-row.st-cancelada,.item-row.st-anulado,.item-row.st-anulada{border-left-color:var(--red); opacity:.72;}
+.item-row .info{flex:1; min-width:160px;}
+.item-row .info .t1{font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.item-row .info .t2{font-size:11px; color:var(--ink-soft); margin-top:3px; line-height:1.5;}
+.item-row .amt{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13.5px; white-space:nowrap;}
+.item-row .acts{display:flex; gap:6px; flex-wrap:wrap;}
+.item-row.clickable{cursor:pointer;}
+.item-row.clickable:hover{border-color:var(--line-2);}
+
+.empty-state{text-align:center; padding:44px 16px; color:var(--ink-faint); font-size:12.5px;}
+.empty-state svg{width:32px;height:32px;margin-bottom:10px; opacity:.6;}
+.error-state{text-align:center; padding:28px 16px; color:#FF9C8F; font-size:12px; background:rgba(242,104,92,.08); border-radius:16px; border:1px solid rgba(242,104,92,.2);}
+
+.badge{display:inline-block; padding:3px 9px; border-radius:99px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.3px;}
+.b-pendiente,.b-vencida{background:rgba(232,176,75,.16); color:var(--amber);}
+.b-confirmada,.b-en_proceso,.b-parcial{background:rgba(79,160,232,.16); color:var(--blue);}
+.b-completada,.b-completado,.b-pagada{background:var(--g-soft); color:var(--g1);}
+.b-cancelada,.b-anulado,.b-anulada{background:rgba(242,104,92,.14); color:#FF9C8F;}
+.b-rol-admin{background:rgba(232,176,75,.16); color:var(--amber);}
+.b-rol-jefe{background:rgba(79,160,232,.16); color:var(--blue);}
+.b-rol-vendedor{background:var(--g-soft); color:var(--g1);}
+
+.switch{position:relative; width:40px; height:23px; flex-shrink:0; display:inline-block;}
+.switch input{opacity:0;width:0;height:0;}
+.switch .track{position:absolute; inset:0; background:rgba(255,255,255,.14); border-radius:99px; transition:.25s; cursor:pointer;}
+.switch .track::before{content:'';position:absolute;width:17px;height:17px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s var(--ease); box-shadow:0 1px 3px rgba(0,0,0,.3);}
+.switch input:checked + .track{background:var(--g1);}
+.switch input:checked + .track::before{transform:translateX(17px);}
+
+/* ---------- modal ---------- */
+.modal-overlay{position:fixed; inset:0; background:rgba(4,10,7,.55); backdrop-filter:blur(4px); z-index:60; display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .25s var(--ease);}
+.modal-overlay.show{opacity:1; pointer-events:auto;}
+@media(min-width:640px){ .modal-overlay{align-items:center;} }
+.modal-box{width:100%; max-width:460px; max-height:88vh; overflow-y:auto; border-radius:26px 26px 0 0; padding:20px 22px calc(env(safe-area-inset-bottom,0px) + 22px); transform:translateY(100%); transition:transform .38s var(--ease);}
+@media(min-width:640px){ .modal-box{border-radius:24px; transform:translateY(24px) scale(.97); opacity:0;} }
+.modal-overlay.show .modal-box{transform:translateY(0) scale(1); opacity:1;}
+.modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.modal-head h3{font-size:15.5px; margin:0; font-weight:800;}
+.modal-actions{display:flex; gap:10px; margin-top:18px;}
+.form-row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.form-row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}
+
+.toast{position:fixed; top:calc(env(safe-area-inset-top,0px) + 14px); left:50%; transform:translateX(-50%) translateY(-140%); z-index:90; background:#161B18; color:#fff; padding:12px 18px; border-radius:14px; font-size:12.5px; font-weight:600; box-shadow:0 12px 32px rgba(0,0,0,.4); display:flex; align-items:center; gap:8px; transition:transform .35s var(--ease); max-width:88vw; border:1px solid var(--line-2);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast svg{width:15px;height:15px;flex-shrink:0; color:var(--g1);}
+.toast.err svg{color:var(--red);}
+.toast.err{border-color:rgba(242,104,92,.3);}
+
+.seg-mini{display:flex; gap:6px;}
+.seg-mini button{flex:1; padding:9px 6px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.03); font-weight:700; font-size:12px; color:var(--ink-soft); cursor:pointer;}
+.seg-mini button.active{border-color:var(--g-line); background:var(--g-soft); color:var(--g1);}
+
+.help-text{font-size:11px; color:var(--ink-faint); margin-top:5px; line-height:1.55;}
+.divider{height:1px; background:var(--line); margin:16px 0;}
+.chip{display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:99px; background:rgba(255,255,255,.05); border:1px solid var(--line); font-size:11px; font-weight:600; color:var(--ink-soft);}
+.cart-line{display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line);}
+.cart-line:last-child{border-bottom:none;}
+.cart-line .cl-name{flex:1; font-size:12.5px; font-weight:600;}
+.cart-line .cl-qty{width:64px;}
+.cart-line .cl-amt{font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:700; width:64px; text-align:right;}
+.qty-stepper{display:flex; align-items:center; gap:6px;}
+.qty-stepper button{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-2); background:rgba(255,255,255,.05); color:var(--ink); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+.qty-stepper button svg{width:12px;height:12px;}
+.saldo-hero{border-radius:20px; padding:20px; text-align:center; margin-bottom:16px;}
+.saldo-hero .amt{font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:800;}
+.saldo-hero .lbl{font-size:11px; color:var(--ink-soft); margin-top:4px; font-weight:600;}
+.progress-bar{width:100%; height:7px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden; margin:8px 0;}
+.progress-bar .fill{height:100%; background:linear-gradient(90deg,var(--g1),var(--g2)); border-radius:99px;}
+#avisoConexion{position:fixed;top:0;left:0;right:0;z-index:9999;background:#8A2E23;color:#fff;text-align:center;padding:10px 16px;font-size:12px;font-weight:600;}
+.stack-sm{display:flex; flex-direction:column; gap:8px;}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="viewLogin">
+  <div class="blob blob-a"></div>
+  <div class="blob blob-b"></div>
+  <div class="login-card glass">
+    <img src="https://i.ibb.co/7dZ9Yw7f/Maquinas-G.png" alt="Máquinas Autoservicios">
+    <h1>Panel administrativo</h1>
+    <p>Máquinas Autoservicios · acceso de personal</p>
+    <label class="field-label">Correo</label>
+    <input type="email" id="loginEmail" placeholder="tucorreo@negocio.com" autocomplete="username">
+    <label class="field-label">Contraseña</label>
+    <div class="pw-wrap">
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+      <button type="button" id="btnTogglePw" aria-label="Mostrar contraseña"><i data-ic="eye"></i></button>
+    </div>
+    <button class="btn btn-primary btn-block" id="btnLogin" style="margin-top:20px;">Iniciar sesión</button>
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="viewApp">
+  <div class="app-frame">
+    <aside class="sidebar glass" style="border-radius:0;">
+      <div class="sidebar-logo">
+        <img src="https://i.ibb.co/7dZ9Yw7f/Maquinas-G.png" alt="">
+        <span>Máquinas<br>Autoservicios</span>
+      </div>
+      <nav id="sideNav" style="overflow-y:auto;"></nav>
+      <div class="sidebar-foot">
+        <div class="sidebar-user" id="sidebarUser"></div>
+        <button class="nav-item" id="btnLogout"><i data-ic="log-out"></i> Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <div class="main-col">
+      <div class="topbar">
+        <h1 id="topbarTitle">Resumen</h1>
+        <div class="topbar-right">
+          <button class="btn btn-glass btn-icon" id="btnMoreDesktop" title="Más opciones" style="display:none;"><i data-ic="more-horizontal"></i></button>
+        </div>
+      </div>
+      <div class="content" id="content"></div>
+    </div>
+  </div>
+
+  <div class="dock-wrap">
+    <nav class="dock glass" id="dockNav"></nav>
+  </div>
+</div>
+
+<div id="sheetRoot"></div>
+<div id="modalRoot"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* =====================================================================
+   ICONOS — trazos propios en línea (sin depender de un CDN externo)
+===================================================================== */
+const ICONS = {
+  'home':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg>',
+  'droplet':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s7 7.5 7 12.2A7 7 0 0 1 5 15.2C5 10.5 12 3 12 3Z"/></svg>',
+  'calendar':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  'box':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 12 4l9 4-9 4-9-4Z"/><path d="M3 8v8l9 4 9-4V8M12 12v8"/></svg>',
+  'credit-card':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 14.5h4"/></svg>',
+  'gem':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 5-9 13L3 8Z"/><path d="M3 8h18M9 3l3 5 3-5M9 8l3 13 3-13"/></svg>',
+  'cloud-rain':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.8 17a4.2 4.2 0 0 1-.5-8.4A5.4 5.4 0 0 1 16.8 8a3.9 3.9 0 0 1-.4 8"/><path d="M9 19.5 8 21.3M13 18.5l-1 2M17 18.8l-1 2"/></svg>',
+  'wallet':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h11A2.5 2.5 0 0 1 19 7.5V8H5.5A2.5 2.5 0 0 1 3 5.5"/><rect x="3" y="8" width="18" height="12" rx="2.5"/><circle cx="16" cy="14" r="1.4" fill="currentColor" stroke="none"/></svg>',
+  'receipt':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+  'users':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.3"/><path d="M2.7 20c.8-3.4 3.3-5.4 6.3-5.4s5.5 2 6.3 5.4"/><circle cx="17.5" cy="8.6" r="2.6"/><path d="M15.8 14.8c2.3.2 4.1 1.9 4.7 4.4"/></svg>',
+  'settings':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
+  'more-horizontal':'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  'refresh-cw':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.4-6.4L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 21v-5h5"/></svg>',
+  'log-out':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>',
+  'plus':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  'pencil':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  'trash-2':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
+  'x':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  'check':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>',
+  'chevron-right':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>',
+  'arrow-left':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 19-7-7 7-7M4 12h17"/></svg>',
+  'search':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.3-4.3"/></svg>',
+  'alert-triangle':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  'truck':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h11v9H2z"/><path d="M13 11h4l4 3.2V17h-8"/><circle cx="6.5" cy="17.5" r="1.7"/><circle cx="16.5" cy="17.5" r="1.7"/></svg>',
+  'shopping-cart':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="20" r="1.3"/><circle cx="17.5" cy="20" r="1.3"/><path d="M2.5 3h2.4l2.2 12.1a2 2 0 0 0 2 1.6h8a2 2 0 0 0 2-1.6L21 7H6"/></svg>',
+  'list':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>',
+  'user-plus':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5c.8-3.3 3.2-5.2 6.5-5.2s5.7 1.9 6.5 5.2"/><path d="M18.5 8.5v5M16 11h5"/></svg>',
+  'shield-check':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v6c0 4.6 3 7.7 7.5 9 4.5-1.3 7.5-4.4 7.5-9V6L12 3Z"/><path d="m9 12 2 2 4-4.5"/></svg>',
+  'eye':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>',
+  'eye-off':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.6A10.4 10.4 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a15 15 0 0 1-3.2 3.9M6.6 6.9C4 8.7 2.5 12 2.5 12S6 18.5 12 18.5a9.6 9.6 0 0 0 3.4-.6"/><path d="M9.5 10.2A2.8 2.8 0 0 0 12 14.8"/></svg>',
+  'phone':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5c0-.6.4-1 1-1h3l2 5-2 1.3a11 11 0 0 0 5.7 5.7L15 14l5 2v3c0 .6-.4 1-1 1C10.5 20 4 13.5 4 5Z"/></svg>',
+  'banknote':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2.5"/><circle cx="12" cy="12" r="3"/><path d="M6 9v.01M18 15v.01"/></svg>',
+  'package-search':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 12 4l9 4-9 4-9-4Z"/><path d="M3 8v8l7 3.1M21 8v4.3"/><circle cx="17.3" cy="17.3" r="3"/><path d="m20.3 20.3 2 2"/></svg>'
+};
+function drawIcons(root){
+  (root||document).querySelectorAll('[data-ic]').forEach(function(el){
+    var name = el.getAttribute('data-ic'); var markup = ICONS[name];
+    if(!markup) return;
+    var wrap = document.createElement('span'); wrap.innerHTML = markup;
+    var svg = wrap.firstElementChild; if(!svg) return;
+    if(el.className) svg.setAttribute('class', el.className);
+    el.replaceWith(svg);
+  });
+}
+drawIcons();
+
+/* =====================================================================
+   SUPABASE — mismos datos de sincronización del proyecto existente
+===================================================================== */
+const SUPABASE_URL = 'https://tdzjbdaaztrtnlvhxpku.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_BMTr2JTn0BWPVcxsB0V27g_v8YkUmyC';
+
+function mostrarAvisoConexion(){
+  if(document.getElementById('avisoConexion')) return;
+  var b = document.createElement('div');
+  b.id = 'avisoConexion';
+  b.textContent = 'No se pudo conectar con el servidor. Revisa tu conexión a internet o desactiva bloqueadores de anuncios y recarga la página.';
+  document.body.prepend(b);
+}
+function crearClienteSeguro(opts){
+  try{
+    if(!window.supabase || typeof window.supabase.createClient !== 'function') throw new Error('La librería de Supabase no cargó');
+    return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, opts||{});
+  }catch(e){
+    console.error('No se pudo inicializar Supabase:', e);
+    mostrarAvisoConexion();
+    var respuestaError = { data:null, error:{ message:'Sin conexión con el servidor' } };
+    function cadenaSegura(){
+      return new Proxy(function(){}, { get:function(t,p){
+        if(p==='then') return function(resolve){ resolve(respuestaError); };
+        if(p==='catch') return function(){ return Promise.resolve(respuestaError); };
+        return cadenaSegura();
+      }, apply:function(){ return cadenaSegura(); } });
+    }
+    return new Proxy({}, { get:function(t,p){
+      if(p==='auth') return { getSession:async()=>respuestaError, signInWithPassword:async()=>respuestaError, signOut:async()=>respuestaError, signUp:async()=>respuestaError, onAuthStateChange:function(){ return {data:{subscription:{unsubscribe(){}}}}; } };
+      return function(){ return cadenaSegura(); };
+    }});
+  }
+}
+const sb = crearClienteSeguro();
+
+function mensajeError(err, fallback){ return (err && err.message) ? err.message : (fallback||'error desconocido'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function capitalizar(s){ return String(s||'').trim().split(/\s+/).map(w=>w? w[0].toUpperCase()+w.slice(1).toLowerCase():w).join(' '); }
+function fmtUsd(n){ return '$' + (Number(n)||0).toFixed(2); }
+function hoy(){ return new Date().toISOString().slice(0,10); }
+function ahoraISO(){ return new Date().toISOString(); }
+function fmtFecha(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('es-VE',{day:'2-digit',month:'short',year:'numeric'}); }
+function fmtFechaHora(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleString('es-VE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+function labelTipoVeh(t){ return {moto:'Moto',carro:'Carro',camioneta:'Camioneta',otro:'Otro'}[t]||t||''; }
+function labelMetodoPago(m){ return {efectivo:'Efectivo',pago_movil:'Pago móvil',transferencia:'Transferencia',tarjeta:'Tarjeta',zelle:'Zelle',credito:'Crédito',contado:'Contado'}[m]||m||''; }
+function badge(estado, labelMap){
+  var label = (labelMap && labelMap[estado]) || capitalizar(String(estado||'').replace(/_/g,' '));
+  return '<span class="badge b-'+esc(estado)+'">'+esc(label)+'</span>';
+}
+function emptyState(icon, text){ return '<div class="empty-state"><i data-ic="'+icon+'"></i><div>'+esc(text)+'</div></div>'; }
+
+/* Toast */
+let toastTimer=null;
+function toast(msg, isErr){
+  var t = document.getElementById('toast');
+  t.innerHTML = '<i data-ic="'+(isErr?'alert-triangle':'check')+'"></i><span>'+esc(msg)+'</span>';
+  drawIcons(t);
+  t.className = 'toast show' + (isErr?' err':'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.className='toast'; }, 3200);
+}
+
+/* Modal (formularios) */
+function abrirModal(titulo, innerHtml, ancho){
+  var root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box glass-solid" style="${ancho?('max-width:'+ancho+';'):''}">
+        <div class="modal-head"><h3>${esc(titulo)}</h3><button class="modal-close" id="modalCloseBtn"><i data-ic="x"></i></button></div>
+        ${innerHtml}
+      </div>
+    </div>`;
+  drawIcons(root);
+  requestAnimationFrame(()=> document.getElementById('modalOverlay').classList.add('show'));
+  document.getElementById('modalCloseBtn').addEventListener('click', cerrarModal);
+  document.getElementById('modalOverlay').addEventListener('click', function(e){ if(e.target.id==='modalOverlay') cerrarModal(); });
+}
+function cerrarModal(){
+  var ov = document.getElementById('modalOverlay'); if(!ov) return;
+  ov.classList.remove('show');
+  setTimeout(()=>{ document.getElementById('modalRoot').innerHTML=''; }, 250);
+}
+
+/* Sheet (navegación "Más" / detalle rápido) */
+function abrirSheet(titulo, innerHtml){
+  var root = document.getElementById('sheetRoot');
+  root.innerHTML = `
+    <div class="sheet-overlay" id="sheetOverlay">
+      <div class="sheet-box glass-solid">
+        <div class="sheet-grab"></div>
+        <div class="sheet-head"><h3>${esc(titulo)}</h3><button class="modal-close" id="sheetCloseBtn"><i data-ic="x"></i></button></div>
+        ${innerHtml}
+      </div>
+    </div>`;
+  drawIcons(root);
+  requestAnimationFrame(()=> document.getElementById('sheetOverlay').classList.add('show'));
+  document.getElementById('sheetCloseBtn').addEventListener('click', cerrarSheet);
+  document.getElementById('sheetOverlay').addEventListener('click', function(e){ if(e.target.id==='sheetOverlay') cerrarSheet(); });
+}
+function cerrarSheet(){
+  var ov = document.getElementById('sheetOverlay'); if(!ov) return;
+  ov.classList.remove('show');
+  setTimeout(()=>{ document.getElementById('sheetRoot').innerHTML=''; }, 250);
+}
+
+/* Confirmación simple */
+function confirmarAccion(titulo, mensaje, textoBtn, cb, pedirMotivo){
+  abrirModal(titulo, `
+    <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 4px;">${esc(mensaje)}</p>
+    ${pedirMotivo?'<label class="field-label">Motivo</label><textarea id="confMotivo" placeholder="Explica brevemente el motivo…"></textarea>':''}
+    <div class="modal-actions">
+      <button class="btn btn-glass btn-block" id="confCancelar">Cancelar</button>
+      <button class="btn btn-danger btn-block" id="confAceptar">${esc(textoBtn||'Confirmar')}</button>
+    </div>
+  `);
+  document.getElementById('confCancelar').addEventListener('click', cerrarModal);
+  document.getElementById('confAceptar').addEventListener('click', async function(){
+    var motivo = pedirMotivo ? (document.getElementById('confMotivo').value.trim() || null) : null;
+    if(pedirMotivo && !motivo){ toast('Escribe el motivo', true); return; }
+    var btn=this; btn.disabled=true;
+    await cb(motivo);
+    btn.disabled=false;
+  });
+}
+
+/* =====================================================================
+   ESTADO GLOBAL
+===================================================================== */
+let SESION = null;      // sesión de supabase auth
+let PERFIL = null;      // {id, nombre_completo, rol, activo}
+let CONFIG_GENERAL = {};
+let VISTA_ACTUAL = 'resumen';
+
+const NAV = [
+  {id:'resumen', label:'Resumen', icon:'home', roles:['admin','jefe','vendedor'], group:'Operación'},
+  {id:'lavados', label:'Lavados', icon:'droplet', roles:['admin','jefe','vendedor'], group:'Operación'},
+  {id:'citas', label:'Citas', icon:'calendar', roles:['admin','jefe','vendedor'], group:'Operación'},
+  {id:'productos', label:'Productos', icon:'box', roles:['admin','jefe','vendedor'], group:'Operación'},
+  {id:'cuentas_clientes', label:'Créditos y débitos', icon:'credit-card', roles:['admin','jefe','vendedor'], group:'Operación'},
+  {id:'fidelidad', label:'Fidelidad', icon:'gem', roles:['admin','jefe','vendedor'], group:'Operación'},
+  {id:'lluvia', label:'Seguro de lluvia', icon:'cloud-rain', roles:['admin','jefe','vendedor'], group:'Operación'},
+  {id:'gastos', label:'Gastos', icon:'wallet', roles:['admin','jefe'], group:'Finanzas'},
+  {id:'cxp', label:'Cuentas por pagar', icon:'receipt', roles:['admin','jefe'], group:'Finanzas'},
+  {id:'usuarios', label:'Usuarios', icon:'users', roles:['admin'], group:'Administración'},
+  {id:'config', label:'Configuración', icon:'settings', roles:['admin'], group:'Administración'},
+];
+const DOCK_IDS = ['resumen','lavados','citas','productos'];
+
+function navVisible(){ return NAV.filter(n => PERFIL && n.roles.includes(PERFIL.rol)); }
+function esJefeOAdmin(){ return PERFIL && (PERFIL.rol==='admin' || PERFIL.rol==='jefe'); }
+function esAdmin(){ return PERFIL && PERFIL.rol==='admin'; }
+
+/* =====================================================================
+   AUTENTICACIÓN
+===================================================================== */
+document.getElementById('btnTogglePw').addEventListener('click', function(){
+  var inp = document.getElementById('loginPass');
+  var showing = inp.type === 'text';
+  inp.type = showing ? 'password' : 'text';
+  this.innerHTML=''; this.appendChild(Object.assign(document.createElement('span'),{}));
+  this.innerHTML = '<i data-ic="'+(showing?'eye':'eye-off')+'"></i>';
+  drawIcons(this);
+});
+
+document.getElementById('btnLogin').addEventListener('click', hacerLogin);
+document.getElementById('loginPass').addEventListener('keydown', function(e){ if(e.key==='Enter') hacerLogin(); });
+document.getElementById('loginEmail').addEventListener('keydown', function(e){ if(e.key==='Enter') hacerLogin(); });
+
+async function hacerLogin(){
+  var email = document.getElementById('loginEmail').value.trim();
+  var pass = document.getElementById('loginPass').value;
+  var err = document.getElementById('loginError');
+  var btn = document.getElementById('btnLogin');
+  err.textContent='';
+  if(!email || !pass){ err.textContent = 'Escribe tu correo y contraseña'; return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Ingresando…';
+  const {data, error} = await sb.auth.signInWithPassword({email, password:pass});
+  if(error){
+    err.textContent = /invalid/i.test(error.message) ? 'Correo o contraseña incorrectos' : mensajeError(error,'No se pudo iniciar sesión');
+    btn.disabled=false; btn.innerHTML='Iniciar sesión';
+    return;
+  }
+  const ok = await cargarSesion(data.session);
+  btn.disabled=false; btn.innerHTML='Iniciar sesión';
+  if(!ok) err.textContent = 'Tu cuenta no tiene acceso activo. Contacta al administrador.';
+}
+
+document.getElementById('btnLogout').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  SESION=null; PERFIL=null;
+  document.getElementById('viewApp').classList.remove('show');
+  document.getElementById('viewLogin').classList.remove('hidden');
+});
+
+async function cargarSesion(session){
+  if(!session || !session.user){ return false; }
+  const {data: perfil, error} = await sb.from('perfiles').select('*').eq('id', session.user.id).single();
+  if(error || !perfil || !perfil.activo){
+    await sb.auth.signOut();
+    return false;
+  }
+  SESION = session; PERFIL = perfil;
+  const {data: cfg} = await sb.from('config_general').select('*').eq('id',1).single();
+  CONFIG_GENERAL = cfg || {};
+  document.getElementById('viewLogin').classList.add('hidden');
+  document.getElementById('viewApp').classList.add('show');
+  pintarSidebarUsuario();
+  construirNav();
+  irA(navVisible()[0] ? navVisible()[0].id : 'resumen');
+  return true;
+}
+
+(async function initSesion(){
+  const {data} = await sb.auth.getSession();
+  if(data && data.session){ await cargarSesion(data.session); }
+})();
+
+/* =====================================================================
+   NAVEGACIÓN
+===================================================================== */
+function pintarSidebarUsuario(){
+  var iniciales = (PERFIL.nombre_completo||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase();
+  document.getElementById('sidebarUser').innerHTML = `
+    <div class="avatar">${esc(iniciales)}</div>
+    <div><div class="u1">${esc(PERFIL.nombre_completo)}</div><div class="u2">${esc(PERFIL.rol)}</div></div>
+  `;
+}
+function construirNav(){
+  var items = navVisible();
+  var grupos = {};
+  items.forEach(i=>{ (grupos[i.group]=grupos[i.group]||[]).push(i); });
+  var html='';
+  Object.keys(grupos).forEach(g=>{
+    html += `<div class="nav-group-label">${esc(g)}</div>`;
+    grupos[g].forEach(i=>{
+      html += `<button class="nav-item" data-nav="${i.id}"><i data-ic="${i.icon}"></i>${esc(i.label)}</button>`;
+    });
+  });
+  var side = document.getElementById('sideNav');
+  side.innerHTML = html; drawIcons(side);
+  side.querySelectorAll('[data-nav]').forEach(b=> b.addEventListener('click', ()=> irA(b.dataset.nav)));
+
+  var dockItems = items.filter(i=> DOCK_IDS.includes(i.id));
+  var dockHtml = dockItems.map(i=>`<button class="dock-item" data-nav="${i.id}"><i data-ic="${i.icon}"></i><span>${esc(i.label)}</span></button>`).join('');
+  dockHtml += `<button class="dock-item" id="dockMasBtn"><i data-ic="more-horizontal"></i><span>Más</span></button>`;
+  var dock = document.getElementById('dockNav');
+  dock.innerHTML = dockHtml; drawIcons(dock);
+  dock.querySelectorAll('[data-nav]').forEach(b=> b.addEventListener('click', ()=> irA(b.dataset.nav)));
+  document.getElementById('dockMasBtn').addEventListener('click', abrirSheetMas);
+  document.getElementById('btnMoreDesktop').style.display='none';
+}
+function abrirSheetMas(){
+  var items = navVisible().filter(i=> !DOCK_IDS.includes(i.id));
+  var grupos = {};
+  items.forEach(i=>{ (grupos[i.group]=grupos[i.group]||[]).push(i); });
+  var html='<div class="stack-sm">';
+  Object.keys(grupos).forEach(g=>{
+    html += `<div class="nav-group-label" style="padding-left:0;">${esc(g)}</div>`;
+    grupos[g].forEach(i=>{
+      html += `<button class="sheet-nav-item" data-nav="${i.id}"><i data-ic="${i.icon}"></i>${esc(i.label)}</button>`;
+    });
+  });
+  html += `<div class="divider"></div><button class="sheet-nav-item" id="sheetLogout" style="color:var(--red);"><i data-ic="log-out" style="color:var(--red);"></i>Cerrar sesión</button></div>`;
+  abrirSheet('Más opciones', html);
+  document.getElementById('sheetRoot').querySelectorAll('[data-nav]').forEach(b=> b.addEventListener('click', ()=>{ cerrarSheet(); irA(b.dataset.nav); }));
+  document.getElementById('sheetLogout').addEventListener('click', ()=>{ cerrarSheet(); document.getElementById('btnLogout').click(); });
+}
+function irA(vista){
+  if(!navVisible().find(n=>n.id===vista)) return;
+  VISTA_ACTUAL = vista;
+  document.querySelectorAll('[data-nav]').forEach(b=> b.classList.toggle('active', b.dataset.nav===vista));
+  var item = NAV.find(n=>n.id===vista);
+  document.getElementById('topbarTitle').textContent = item ? item.label : '';
+  const cargadores = {
+    resumen: cargarResumen, lavados: cargarLavados, citas: cargarCitas, productos: cargarProductosTab,
+    cuentas_clientes: cargarCuentasClientes, fidelidad: cargarFidelidad, lluvia: cargarLluvia,
+    gastos: cargarGastos, cxp: cargarCxpTab, usuarios: cargarUsuarios, config: cargarConfigTab
+  };
+  (cargadores[vista]||function(){ document.getElementById('content').innerHTML=''; })();
+}
+
+/* =====================================================================
+   CLIENTES — helper compartido (buscar o crear por teléfono)
+===================================================================== */
+async function buscarOCrearCliente(telefono, nombre){
+  telefono = String(telefono||'').trim();
+  if(!telefono) return {data:null, error:{message:'El teléfono es obligatorio'}};
+  const {data: existente} = await sb.from('clientes').select('*').eq('telefono', telefono).maybeSingle();
+  if(existente){
+    if(nombre && !existente.nombre){ await sb.from('clientes').update({nombre: capitalizar(nombre)}).eq('id', existente.id); existente.nombre = capitalizar(nombre); }
+    return {data: existente, error: null};
+  }
+  const {data, error} = await sb.from('clientes').insert({telefono, nombre: nombre?capitalizar(nombre):null}).select().single();
+  return {data, error};
+}
+async function registrarMovimientoCuenta(cliente_id, tipo, monto, concepto, refs){
+  if(!cliente_id || !monto) return;
+  await sb.from('movimientos_cuenta_cliente').insert(Object.assign({
+    cliente_id, tipo, monto_usd:monto, concepto, creado_por: PERFIL.id
+  }, refs||{}));
+}
+async function sumarSelloFidelidad(cliente_id){
+  if(!cliente_id) return;
+  let {data: tarjeta} = await sb.from('tarjetas_fidelidad').select('*').eq('cliente_id', cliente_id).maybeSingle();
+  if(!tarjeta){
+    const {data} = await sb.from('tarjetas_fidelidad').insert({cliente_id}).select().single();
+    tarjeta = data;
+  }
+  if(!tarjeta) return;
+  const umbral = CONFIG_GENERAL.umbral_fidelidad_sellos || 6;
+  let nuevoSellos = (tarjeta.sellos||0) + 1;
+  let nuevosGratis = tarjeta.lavados_gratis_disponibles||0;
+  if(nuevoSellos >= umbral){ nuevoSellos = 0; nuevosGratis += 1; }
+  await sb.from('tarjetas_fidelidad').update({sellos:nuevoSellos, lavados_gratis_disponibles:nuevosGratis}).eq('id', tarjeta.id);
+  if(nuevosGratis > (tarjeta.lavados_gratis_disponibles||0)) toast('¡Sello completado! Se otorgó un lavado gratis 🎉');
+}
+
+/* =====================================================================
+   RESUMEN
+===================================================================== */
+async function cargarResumen(){
+  var c = document.getElementById('content');
+  c.innerHTML = `<div class="stat-grid" id="statGrid"></div>
+    <div class="section-head"><h2>Actividad reciente</h2></div>
+    <div class="card-list" id="listaReciente"><div class="empty-state">Cargando…</div></div>`;
+  const inicioHoy = hoy()+'T00:00:00';
+  const [lavHoy, citasHoy, prodBajo, lavRecientes] = await Promise.all([
+    sb.from('lavados').select('precio_usd,estado,anulado').gte('fecha_lavado', inicioHoy).eq('anulado', false),
+    sb.from('citas').select('id,estado').eq('fecha', hoy()),
+    sb.from('productos').select('id,stock,stock_minimo').eq('activo', true),
+    sb.from('lavados').select('*').order('created_at',{ascending:false}).limit(6)
+  ]);
+  const lavadosHoy = lavHoy.data||[];
+  const ingresosHoy = lavadosHoy.filter(l=>l.estado==='completado').reduce((a,b)=>a+Number(b.precio_usd||0),0);
+  const citasHoyCount = (citasHoy.data||[]).length;
+  const bajoStock = (prodBajo.data||[]).filter(p=> Number(p.stock) <= Number(p.stock_minimo)).length;
+
+  var stats = [
+    {ic:'droplet', val: lavadosHoy.length, lbl:'Lavados hoy'},
+    {ic:'banknote', val: fmtUsd(ingresosHoy), lbl:'Ingresos por lavados hoy'},
+    {ic:'calendar', val: citasHoyCount, lbl:'Citas para hoy'},
+    {ic:'package-search', val: bajoStock, lbl:'Productos con stock bajo'},
+  ];
+  if(esJefeOAdmin()){
+    const [cxp, creditos] = await Promise.all([
+      sb.from('cuentas_por_pagar').select('monto_total_usd,monto_pagado_usd,estado').neq('estado','pagada'),
+      sb.from('movimientos_cuenta_cliente').select('tipo,monto_usd').eq('anulado', false)
+    ]);
+    const cxpPendiente = (cxp.data||[]).reduce((a,b)=>a+(Number(b.monto_total_usd)-Number(b.monto_pagado_usd)),0);
+    const saldoClientes = (creditos.data||[]).reduce((a,b)=> a + (b.tipo==='credito'?Number(b.monto_usd):-Number(b.monto_usd)), 0);
+    stats.push({ic:'receipt', val: fmtUsd(cxpPendiente), lbl:'Por pagar a proveedores'});
+    stats.push({ic:'credit-card', val: fmtUsd(saldoClientes), lbl:'Por cobrar a clientes'});
+  }
+  document.getElementById('statGrid').innerHTML = stats.map(s=>`
+    <div class="stat-card glass"><div class="ic"><i data-ic="${s.ic}"></i></div><div class="val mono">${esc(s.val)}</div><div class="lbl">${esc(s.lbl)}</div></div>
+  `).join('');
+
+  const lista = document.getElementById('listaReciente');
+  const recientes = lavRecientes.data||[];
+  if(recientes.length===0){ lista.innerHTML = emptyState('droplet','Todavía no hay lavados registrados'); }
+  else{
+    lista.innerHTML = recientes.map(l=>`
+      <div class="item-row glass st-${esc(l.estado)}">
+        <span class="info">
+          <span class="t1">${esc(l.nombre_cliente)} ${badge(l.estado)}</span>
+          <span class="t2">${esc(labelTipoVeh(l.tipo_vehiculo))} · ${esc(labelMetodoPago(l.metodo_pago))} · ${fmtFechaHora(l.fecha_lavado)}</span>
+        </span>
+        <span class="amt mono">${fmtUsd(l.precio_usd)}</span>
+      </div>
+    `).join('');
+  }
+  drawIcons(c);
+}
+
+/* =====================================================================
+   LAVADOS
+===================================================================== */
+async function cargarLavados(){
+  var c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="section-head"><h2>Lavados</h2><button class="btn btn-primary btn-sm" id="btnNuevoLavado"><i data-ic="plus"></i>Nuevo lavado</button></div>
+    <div class="filters-row">
+      <select id="fLavEstado"><option value="">Todos los estados</option><option value="en_proceso">En proceso</option><option value="completado">Completados</option><option value="anulado">Anulados</option></select>
+      <input type="date" id="fLavFecha" value="${hoy()}">
+      <button class="btn btn-glass btn-sm" id="fLavHoyClear">Ver todos</button>
+    </div>
+    <div class="card-list" id="listaLavados"></div>`;
+  drawIcons(c);
+  document.getElementById('btnNuevoLavado').addEventListener('click', ()=> modalNuevoLavado());
+  document.getElementById('fLavHoyClear').addEventListener('click', ()=>{ document.getElementById('fLavFecha').value=''; buscarLavados(); });
+  document.getElementById('fLavEstado').addEventListener('change', buscarLavados);
+  document.getElementById('fLavFecha').addEventListener('change', buscarLavados);
+  buscarLavados();
+}
+async function buscarLavados(){
+  const cont = document.getElementById('listaLavados');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  let q = sb.from('lavados').select('*').order('fecha_lavado',{ascending:false}).limit(120);
+  const est = document.getElementById('fLavEstado').value;
+  const fecha = document.getElementById('fLavFecha').value;
+  if(est) q = q.eq('estado', est);
+  if(fecha) q = q.gte('fecha_lavado', fecha+'T00:00:00').lte('fecha_lavado', fecha+'T23:59:59');
+  const {data, error} = await q;
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('droplet','No hay lavados con estos filtros'); return; }
+  cont.innerHTML = data.map(l=>`
+    <div class="item-row glass st-${esc(l.estado)}">
+      <span class="info">
+        <span class="t1">${esc(l.nombre_cliente)} ${badge(l.estado)}</span>
+        <span class="t2">${esc(labelTipoVeh(l.tipo_vehiculo))}${l.placa?(' · '+esc(l.placa)):''} · ${esc(labelMetodoPago(l.metodo_pago))} · ${fmtFechaHora(l.fecha_lavado)}${l.telefono?(' · '+esc(l.telefono)):''}</span>
+        ${l.anulado?`<span class="t2" style="color:var(--red);">Anulado: ${esc(l.anulado_motivo||'')}</span>`:''}
+      </span>
+      <span class="amt mono">${fmtUsd(l.precio_usd)}</span>
+      <span class="acts">
+        ${l.estado==='en_proceso'?`<button class="btn btn-primary btn-sm" onclick="completarLavado('${l.id}','${l.cliente_id||''}')">Completar</button>`:''}
+        ${(!l.anulado && esJefeOAdmin())?`<button class="btn btn-danger btn-sm" onclick="pedirAnularLavado('${l.id}')">Anular</button>`:''}
+      </span>
+    </div>
+  `).join('');
+  drawIcons(cont);
+}
+async function completarLavado(id, clienteId){
+  const {error} = await sb.from('lavados').update({estado:'completado'}).eq('id', id);
+  if(error){ toast('No se pudo completar: '+mensajeError(error), true); return; }
+  if(clienteId) await sumarSelloFidelidad(clienteId);
+  toast('Lavado marcado como completado');
+  buscarLavados();
+}
+function pedirAnularLavado(id){
+  confirmarAccion('Anular lavado', 'Esta acción anulará el recibo del lavado. Escribe el motivo.', 'Anular lavado', async (motivo)=>{
+    const {error} = await sb.rpc('anular_lavado', {p_id:id, p_motivo:motivo});
+    if(error){ toast('No se pudo anular: '+mensajeError(error), true); return; }
+    toast('Lavado anulado'); cerrarModal(); buscarLavados();
+  }, true);
+}
+async function modalNuevoLavado(prefill){
+  prefill = prefill || {};
+  const {data: servicios} = await sb.from('servicios').select('*').eq('activo', true).order('nombre');
+  const opcionesServicio = (servicios||[]).map(s=>`<option value="${s.id}" data-precio="${s.precio_usd}" data-tipo="${s.tipo_vehiculo}">${esc(s.nombre)} (${labelTipoVeh(s.tipo_vehiculo)}) — ${fmtUsd(s.precio_usd)}</option>`).join('');
+  abrirModal(prefill.citaId?'Atender cita — nuevo lavado':'Nuevo lavado', `
+    <label class="field-label">Teléfono del cliente</label>
+    <input type="tel" id="nlTelefono" placeholder="0412-0000000" value="${esc(prefill.telefono||'')}">
+    <label class="field-label">Nombre del cliente</label>
+    <input type="text" id="nlNombre" placeholder="Nombre y apellido" value="${esc(prefill.nombre||'')}">
+    <div class="form-row2">
+      <div><label class="field-label">Tipo de vehículo</label>
+        <select id="nlTipo">
+          <option value="moto" ${prefill.tipo==='moto'?'selected':''}>Moto</option>
+          <option value="carro" ${!prefill.tipo||prefill.tipo==='carro'?'selected':''}>Carro</option>
+          <option value="camioneta" ${prefill.tipo==='camioneta'?'selected':''}>Camioneta</option>
+          <option value="otro" ${prefill.tipo==='otro'?'selected':''}>Otro</option>
+        </select></div>
+      <div><label class="field-label">Placa (opcional)</label><input type="text" id="nlPlaca" value="${esc(prefill.placa||'')}"></div>
+    </div>
+    <label class="field-label">Servicio</label>
+    <select id="nlServicio"><option value="">— Sin catálogo / precio libre —</option>${opcionesServicio}</select>
+    <div class="form-row2">
+      <div><label class="field-label">Precio (USD)</label><input type="number" step="0.01" id="nlPrecio" value="${prefill.precio||''}"></div>
+      <div><label class="field-label">Método de pago</label>
+        <select id="nlMetodo">
+          <option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option>
+          <option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option>
+          <option value="zelle">Zelle</option><option value="credito">Crédito (a la cuenta del cliente)</option>
+        </select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12.5px;font-weight:600;">
+      <span class="switch"><input type="checkbox" id="nlLluvia"><span class="track"></span></span>
+      Incluir seguro de lluvia (+${fmtUsd(CONFIG_GENERAL.precio_seguro_lluvia_usd||1.5)}, válido ${CONFIG_GENERAL.horas_seguro_lluvia||48}h)
+    </label>
+    <button class="btn btn-primary btn-block" id="btnGuardarLavado" style="margin-top:18px;">${prefill.citaId?'Registrar y completar cita':'Registrar lavado'}</button>
+  `, '480px');
+  document.getElementById('nlServicio').addEventListener('change', function(){
+    var opt = this.selectedOptions[0];
+    if(opt && opt.dataset.precio){ document.getElementById('nlPrecio').value = opt.dataset.precio; document.getElementById('nlTipo').value = opt.dataset.tipo; }
+  });
+  if(prefill.servicioId){ document.getElementById('nlServicio').value = prefill.servicioId; document.getElementById('nlServicio').dispatchEvent(new Event('change')); }
+  document.getElementById('btnGuardarLavado').addEventListener('click', async function(){
+    const btn=this;
+    const telefono = document.getElementById('nlTelefono').value.trim();
+    const nombre = document.getElementById('nlNombre').value.trim();
+    const precio = Number(document.getElementById('nlPrecio').value)||0;
+    if(!telefono){ toast('Escribe el teléfono del cliente', true); return; }
+    if(!nombre){ toast('Escribe el nombre del cliente', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {data: cliente, error: errCliente} = await buscarOCrearCliente(telefono, nombre);
+    if(errCliente){ toast('No se pudo registrar el cliente: '+mensajeError(errCliente), true); btn.disabled=false; btn.innerHTML='Registrar lavado'; return; }
+    const metodo = document.getElementById('nlMetodo').value;
+    const payload = {
+      cita_id: prefill.citaId||null, cliente_id: cliente.id, nombre_cliente: capitalizar(nombre), telefono,
+      servicio_id: document.getElementById('nlServicio').value||null,
+      tipo_vehiculo: document.getElementById('nlTipo').value, placa: document.getElementById('nlPlaca').value.trim()||null,
+      precio_usd: precio, metodo_pago: metodo, vendedor_id: PERFIL.id
+    };
+    const {data: lavado, error} = await sb.from('lavados').insert(payload).select().single();
+    if(error){ toast('No se pudo registrar el lavado: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Registrar lavado'; return; }
+    if(metodo==='credito'){ await registrarMovimientoCuenta(cliente.id, 'credito', precio, 'Lavado a crédito', {referencia_lavado_id: lavado.id}); }
+    if(document.getElementById('nlLluvia').checked){
+      await sb.from('seguros_lluvia').insert({lavado_id:lavado.id, cliente_id:cliente.id, precio_usd: CONFIG_GENERAL.precio_seguro_lluvia_usd||1.5, fecha_lavado: ahoraISO()});
+    }
+    if(prefill.citaId){ await sb.from('citas').update({estado:'completada'}).eq('id', prefill.citaId); }
+    toast('Lavado registrado'); cerrarModal();
+    if(VISTA_ACTUAL==='lavados') buscarLavados(); if(VISTA_ACTUAL==='citas') buscarCitas();
+  });
+}
+
+/* =====================================================================
+   CITAS
+===================================================================== */
+async function cargarCitas(){
+  var c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="section-head"><h2>Citas de lavado</h2><button class="btn btn-primary btn-sm" id="btnNuevaCita"><i data-ic="plus"></i>Apartar cita</button></div>
+    <div class="filters-row">
+      <select id="fCitaEstado"><option value="">Todos los estados</option><option value="pendiente">Pendientes</option><option value="confirmada">Confirmadas</option><option value="completada">Completadas</option><option value="cancelada">Canceladas</option></select>
+      <input type="date" id="fCitaFecha" value="${hoy()}">
+      <button class="btn btn-glass btn-sm" id="fCitaVerTodas">Ver todas</button>
+    </div>
+    <div class="card-list" id="listaCitas"></div>`;
+  drawIcons(c);
+  document.getElementById('btnNuevaCita').addEventListener('click', ()=> modalNuevaCita());
+  document.getElementById('fCitaVerTodas').addEventListener('click', ()=>{ document.getElementById('fCitaFecha').value=''; buscarCitas(); });
+  document.getElementById('fCitaEstado').addEventListener('change', buscarCitas);
+  document.getElementById('fCitaFecha').addEventListener('change', buscarCitas);
+  buscarCitas();
+}
+async function buscarCitas(){
+  const cont = document.getElementById('listaCitas');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  let q = sb.from('citas').select('*').order('fecha',{ascending:true}).order('hora',{ascending:true}).limit(150);
+  const est = document.getElementById('fCitaEstado').value;
+  const fecha = document.getElementById('fCitaFecha').value;
+  if(est) q = q.eq('estado', est);
+  if(fecha) q = q.eq('fecha', fecha);
+  const {data, error} = await q;
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('calendar','No hay citas con estos filtros'); return; }
+  const ahora = new Date();
+  cont.innerHTML = data.map(c=>{
+    const venc = new Date(c.fecha+'T'+c.hora);
+    const estadoMostrado = (['pendiente','confirmada'].includes(c.estado) && venc < ahora) ? 'vencida' : c.estado;
+    let acciones = '';
+    if(c.estado==='pendiente') acciones += `<button class="btn btn-glass btn-sm" onclick="cambiarEstadoCita('${c.id}','confirmada')">Confirmar</button>`;
+    if(['pendiente','confirmada'].includes(c.estado)) acciones += `<button class="btn btn-primary btn-sm" onclick='atenderCita(${JSON.stringify(c)})'>Atender ahora</button>`;
+    if(['pendiente','confirmada'].includes(c.estado)) acciones += `<button class="btn btn-danger btn-sm" onclick="cambiarEstadoCita('${c.id}','cancelada')">Cancelar</button>`;
+    return `<div class="item-row glass st-${esc(estadoMostrado)}">
+      <span class="info">
+        <span class="t1">${esc(c.nombre_cliente)} ${badge(estadoMostrado)}</span>
+        <span class="t2">${esc(labelTipoVeh(c.tipo_vehiculo))} · ${c.modalidad==='domicilio'?'A domicilio':'En el local'} · ${fmtFecha(c.fecha)} ${esc(c.hora)} · ${esc(c.telefono)}</span>
+      </span>
+      <span class="acts">${acciones}</span>
+    </div>`;
+  }).join('');
+  drawIcons(cont);
+}
+async function cambiarEstadoCita(id, estado){
+  const {error} = await sb.from('citas').update({estado}).eq('id', id);
+  if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
+  toast('Cita actualizada'); buscarCitas();
+}
+function atenderCita(cita){
+  modalNuevoLavado({
+    citaId: cita.id, telefono: cita.telefono, nombre: cita.nombre_cliente, tipo: cita.tipo_vehiculo,
+    placa: cita.placa, servicioId: cita.servicio_id||''
+  });
+}
+async function modalNuevaCita(){
+  const {data: servicios} = await sb.from('servicios').select('*').eq('activo', true).order('nombre');
+  const opcionesServicio = (servicios||[]).map(s=>`<option value="${s.id}" data-tipo="${s.tipo_vehiculo}">${esc(s.nombre)} (${labelTipoVeh(s.tipo_vehiculo)})</option>`).join('');
+  abrirModal('Apartar cita de lavado', `
+    <label class="field-label">Teléfono del cliente</label><input type="tel" id="ncTelefono" placeholder="0412-0000000">
+    <label class="field-label">Nombre del cliente</label><input type="text" id="ncNombre" placeholder="Nombre y apellido">
+    <div class="form-row2">
+      <div><label class="field-label">Tipo de vehículo</label>
+        <select id="ncTipo"><option value="carro">Carro</option><option value="moto">Moto</option><option value="camioneta">Camioneta</option><option value="otro">Otro</option></select></div>
+      <div><label class="field-label">Placa (opcional)</label><input type="text" id="ncPlaca"></div>
+    </div>
+    <label class="field-label">Servicio (opcional)</label><select id="ncServicio"><option value="">— Por definir —</option>${opcionesServicio}</select>
+    <div class="form-row2">
+      <div><label class="field-label">Fecha</label><input type="date" id="ncFecha" value="${hoy()}"></div>
+      <div><label class="field-label">Hora</label><input type="time" id="ncHora"></div>
+    </div>
+    <label class="field-label">Modalidad</label>
+    <div class="seg-mini"><button type="button" class="active" data-mod="local">En el local</button><button type="button" data-mod="domicilio">A domicilio</button></div>
+    <label class="field-label">Notas (opcional)</label><textarea id="ncNotas"></textarea>
+    <button class="btn btn-primary btn-block" id="btnGuardarCita" style="margin-top:18px;">Apartar cita</button>
+  `, '480px');
+  let modalidad='local';
+  document.querySelectorAll('.seg-mini [data-mod]').forEach(b=> b.addEventListener('click', function(){
+    document.querySelectorAll('.seg-mini [data-mod]').forEach(x=>x.classList.remove('active'));
+    this.classList.add('active'); modalidad = this.dataset.mod;
+  }));
+  document.getElementById('btnGuardarCita').addEventListener('click', async function(){
+    const btn=this;
+    const telefono = document.getElementById('ncTelefono').value.trim();
+    const nombre = document.getElementById('ncNombre').value.trim();
+    const fecha = document.getElementById('ncFecha').value;
+    const horaInput = document.getElementById('ncHora').value;
+    if(!telefono || !nombre){ toast('Escribe el teléfono y el nombre del cliente', true); return; }
+    if(!fecha || !horaInput){ toast('Selecciona fecha y hora', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {data: cliente, error: errCliente} = await buscarOCrearCliente(telefono, nombre);
+    if(errCliente){ toast('No se pudo registrar el cliente: '+mensajeError(errCliente), true); btn.disabled=false; btn.innerHTML='Apartar cita'; return; }
+    const {error} = await sb.from('citas').insert({
+      cliente_id: cliente.id, nombre_cliente: capitalizar(nombre), telefono,
+      servicio_id: document.getElementById('ncServicio').value||null,
+      tipo_vehiculo: document.getElementById('ncTipo').value, placa: document.getElementById('ncPlaca').value.trim()||null,
+      modalidad, fecha, hora: horaInput, notas: document.getElementById('ncNotas').value.trim()||null,
+      creado_por: PERFIL.id
+    });
+    if(error){ toast('No se pudo apartar la cita: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Apartar cita'; return; }
+    toast('Cita apartada'); cerrarModal(); buscarCitas();
+  });
+}
+
+/* =====================================================================
+   PRODUCTOS — Catálogo / Vender / Servicios / Compras / Kardex
+===================================================================== */
+let PROD_TAB = 'catalogo';
+let CARRITO = [];
+function cargarProductosTab(){
+  PROD_TAB = 'catalogo'; CARRITO = [];
+  pintarTabsProductos();
+}
+function pintarTabsProductos(){
+  const jefe = esJefeOAdmin();
+  const tabs = [
+    {id:'catalogo', label:'Catálogo'}, {id:'vender', label:'Vender'},
+  ];
+  if(jefe) tabs.push({id:'servicios', label:'Servicios'}, {id:'compras', label:'Compras'}, {id:'kardex', label:'Kardex'});
+  var c = document.getElementById('content');
+  c.innerHTML = `<div class="tabs-row" id="prodTabs"></div><div id="prodBody"></div>`;
+  document.getElementById('prodTabs').innerHTML = tabs.map(t=>`<button class="tab-btn ${t.id===PROD_TAB?'active':''}" data-t="${t.id}">${esc(t.label)}</button>`).join('');
+  document.getElementById('prodTabs').querySelectorAll('[data-t]').forEach(b=> b.addEventListener('click', ()=>{ PROD_TAB=b.dataset.t; CARRITO=[]; pintarTabsProductos(); }));
+  const render = {catalogo:renderCatalogoProductos, vender:renderVenderProductos, servicios:renderServiciosCatalogo, compras:renderCompras, kardex:renderKardex}[PROD_TAB];
+  if(render) render();
+}
+const CAT_LABEL = {consumible:'Consumible', repuesto:'Repuesto', accesorio:'Accesorio'};
+
+async function renderCatalogoProductos(){
+  const jefe = esJefeOAdmin();
+  var body = document.getElementById('prodBody');
+  body.innerHTML = `
+    <div class="section-head"><h2>Catálogo de productos</h2>${jefe?'<button class="btn btn-primary btn-sm" id="btnNuevoProducto"><i data-ic="plus"></i>Nuevo producto</button>':''}</div>
+    <div class="filters-row">
+      <select id="fProdCat"><option value="">Todas las categorías</option><option value="consumible">Consumibles</option><option value="repuesto">Repuestos</option><option value="accesorio">Accesorios</option></select>
+      <input type="text" id="fProdBuscar" placeholder="Buscar por nombre o SKU…">
+    </div>
+    <div class="card-list" id="listaProductos"></div>`;
+  drawIcons(body);
+  if(jefe) document.getElementById('btnNuevoProducto').addEventListener('click', ()=> modalProducto());
+  document.getElementById('fProdCat').addEventListener('change', buscarProductosCatalogo);
+  document.getElementById('fProdBuscar').addEventListener('input', debounce(buscarProductosCatalogo, 260));
+  buscarProductosCatalogo();
+}
+function debounce(fn, ms){ let t; return function(){ clearTimeout(t); const a=arguments; t=setTimeout(()=>fn.apply(null,a), ms); }; }
+async function buscarProductosCatalogo(){
+  const jefe = esJefeOAdmin();
+  const cont = document.getElementById('listaProductos');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  let q = sb.from('productos').select('*').order('nombre');
+  const cat = document.getElementById('fProdCat').value;
+  const texto = document.getElementById('fProdBuscar').value.trim();
+  if(cat) q = q.eq('categoria', cat);
+  if(texto) q = q.or(`nombre.ilike.%${texto}%,sku.ilike.%${texto}%`);
+  const {data, error} = await q;
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('box','No hay productos con estos filtros'); return; }
+  cont.innerHTML = data.map(p=>{
+    const bajo = Number(p.stock) <= Number(p.stock_minimo);
+    return `<div class="item-row glass ${bajo?'st-vencida':'st-completada'}">
+      <span class="info">
+        <span class="t1">${esc(p.nombre)} <span class="chip">${CAT_LABEL[p.categoria]||p.categoria}</span>${!p.activo?'<span class="badge b-cancelada">Inactivo</span>':''}</span>
+        <span class="t2">Stock: ${esc(p.stock)} ${esc(p.unidad)} ${bajo?'· <span style="color:var(--amber);font-weight:700;">bajo mínimo</span>':''}${p.sku?(' · SKU '+esc(p.sku)):''}${jefe?(' · Costo '+fmtUsd(p.costo_usd)):''}</span>
+      </span>
+      <span class="amt mono">${fmtUsd(p.precio_usd)}</span>
+      ${jefe?`<span class="acts"><button class="btn btn-glass btn-sm" onclick='abrirModalProductoJSON(${JSON.stringify(p)})'><i data-ic="pencil"></i></button></span>`:''}
+    </div>`;
+  }).join('');
+  drawIcons(cont);
+}
+function abrirModalProductoJSON(p){ modalProducto(p); }
+function modalProducto(p){
+  p = p || {};
+  abrirModal(p.id?'Editar producto':'Nuevo producto', `
+    <label class="field-label">Nombre</label><input type="text" id="pNombre" value="${esc(p.nombre||'')}">
+    <div class="form-row2">
+      <div><label class="field-label">Categoría</label>
+        <select id="pCategoria">
+          <option value="consumible" ${p.categoria==='consumible'?'selected':''}>Consumible</option>
+          <option value="repuesto" ${p.categoria==='repuesto'?'selected':''}>Repuesto</option>
+          <option value="accesorio" ${p.categoria==='accesorio'?'selected':''}>Accesorio</option>
+        </select></div>
+      <div><label class="field-label">Unidad</label><input type="text" id="pUnidad" value="${esc(p.unidad||'unidad')}"></div>
+    </div>
+    <label class="field-label">SKU / código (opcional)</label><input type="text" id="pSku" value="${esc(p.sku||'')}">
+    <div class="form-row2">
+      <div><label class="field-label">Costo (USD)</label><input type="number" step="0.01" id="pCosto" value="${p.costo_usd||0}"></div>
+      <div><label class="field-label">Precio de venta (USD)</label><input type="number" step="0.01" id="pPrecio" value="${p.precio_usd||0}"></div>
+    </div>
+    <div class="form-row2">
+      <div><label class="field-label">Stock actual</label><input type="number" step="0.01" id="pStock" value="${p.stock||0}" ${p.id?'disabled':''}></div>
+      <div><label class="field-label">Stock mínimo</label><input type="number" step="0.01" id="pStockMin" value="${p.stock_minimo||0}"></div>
+    </div>
+    ${p.id?'<div class="help-text">El stock actual se ajusta desde Compras o Ventas, no editando este campo.</div>':''}
+    <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12.5px;font-weight:600;">
+      <span class="switch"><input type="checkbox" id="pActivo" ${p.activo!==false?'checked':''}><span class="track"></span></span> Producto activo
+    </label>
+    <button class="btn btn-primary btn-block" id="btnGuardarProducto" style="margin-top:18px;">Guardar producto</button>
+  `);
+  document.getElementById('btnGuardarProducto').addEventListener('click', async function(){
+    const btn=this;
+    const nombre = document.getElementById('pNombre').value.trim();
+    if(!nombre){ toast('Escribe el nombre del producto', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const payload = {
+      nombre: capitalizar(nombre), categoria: document.getElementById('pCategoria').value,
+      unidad: document.getElementById('pUnidad').value.trim()||'unidad', sku: document.getElementById('pSku').value.trim()||null,
+      costo_usd: Number(document.getElementById('pCosto').value)||0, precio_usd: Number(document.getElementById('pPrecio').value)||0,
+      stock_minimo: Number(document.getElementById('pStockMin').value)||0, activo: document.getElementById('pActivo').checked
+    };
+    if(!p.id) payload.stock = Number(document.getElementById('pStock').value)||0;
+    const q = p.id ? sb.from('productos').update(payload).eq('id', p.id) : sb.from('productos').insert(payload);
+    const {error} = await q;
+    if(error){ toast('No se pudo guardar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Guardar producto'; return; }
+    toast('Producto guardado'); cerrarModal(); buscarProductosCatalogo();
+  });
+}
+
+async function renderVenderProductos(){
+  var body = document.getElementById('prodBody');
+  const {data: productos} = await sb.from('productos').select('*').eq('activo', true).gt('stock',0).order('nombre');
+  body.innerHTML = `
+    <div class="section-head"><h2>Vender productos</h2></div>
+    <label class="field-label">Buscar producto</label>
+    <select id="vpProducto">
+      <option value="">Selecciona un producto…</option>
+      ${(productos||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_usd}" data-stock="${p.stock}" data-nombre="${esc(p.nombre)}">${esc(p.nombre)} — ${fmtUsd(p.precio_usd)} (stock ${p.stock})</option>`).join('')}
+    </select>
+    <button class="btn btn-glass btn-block" id="btnAgregarCarrito" style="margin-top:10px;"><i data-ic="plus"></i>Agregar al carrito</button>
+    <div class="divider"></div>
+    <div id="carritoLineas"></div>
+    <div class="divider"></div>
+    <label class="field-label">Teléfono del cliente (opcional)</label><input type="tel" id="vpTelefono" placeholder="0412-0000000">
+    <label class="field-label">Nombre del cliente (opcional)</label><input type="text" id="vpNombre">
+    <label class="field-label">Método de pago</label>
+    <select id="vpMetodo"><option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="zelle">Zelle</option><option value="credito">Crédito (a la cuenta del cliente)</option></select>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
+      <span style="font-size:13px;font-weight:700;">Total</span><span class="amt mono" id="carritoTotal" style="font-size:18px;">$0.00</span>
+    </div>
+    <button class="btn btn-primary btn-block" id="btnRegistrarVenta" style="margin-top:14px;">Registrar venta</button>
+  `;
+  drawIcons(body);
+  document.getElementById('btnAgregarCarrito').addEventListener('click', function(){
+    const sel = document.getElementById('vpProducto');
+    const opt = sel.selectedOptions[0];
+    if(!opt || !opt.value){ toast('Selecciona un producto', true); return; }
+    const existente = CARRITO.find(x=>x.producto_id===opt.value);
+    const stockDisp = Number(opt.dataset.stock);
+    if(existente){ if(existente.cantidad+1 > stockDisp){ toast('No hay suficiente stock', true); return; } existente.cantidad += 1; }
+    else{ if(stockDisp<1){ toast('Sin stock disponible', true); return; } CARRITO.push({producto_id:opt.value, nombre:opt.dataset.nombre, precio:Number(opt.dataset.precio), stockDisp, cantidad:1}); }
+    pintarCarrito();
+  });
+  document.getElementById('btnRegistrarVenta').addEventListener('click', registrarVenta);
+  pintarCarrito();
+}
+function pintarCarrito(){
+  const cont = document.getElementById('carritoLineas');
+  if(CARRITO.length===0){ cont.innerHTML = emptyState('shopping-cart','El carrito está vacío'); document.getElementById('carritoTotal').textContent='$0.00'; drawIcons(cont); return; }
+  cont.innerHTML = CARRITO.map((it,i)=>`
+    <div class="cart-line">
+      <span class="cl-name">${esc(it.nombre)}</span>
+      <span class="qty-stepper">
+        <button type="button" onclick="cambiarCantCarrito(${i},-1)"><i data-ic="x"></i></button>
+        <span class="mono" style="min-width:20px;text-align:center;">${it.cantidad}</span>
+        <button type="button" onclick="cambiarCantCarrito(${i},1)"><i data-ic="plus"></i></button>
+      </span>
+      <span class="cl-amt mono">${fmtUsd(it.precio*it.cantidad)}</span>
+    </div>`).join('');
+  drawIcons(cont);
+  const total = CARRITO.reduce((a,b)=>a+b.precio*b.cantidad,0);
+  document.getElementById('carritoTotal').textContent = fmtUsd(total);
+}
+function cambiarCantCarrito(i, delta){
+  const it = CARRITO[i]; if(!it) return;
+  const nueva = it.cantidad + delta;
+  if(nueva <= 0){ CARRITO.splice(i,1); pintarCarrito(); return; }
+  if(nueva > it.stockDisp){ toast('No hay suficiente stock', true); return; }
+  it.cantidad = nueva; pintarCarrito();
+}
+async function registrarVenta(){
+  if(CARRITO.length===0){ toast('Agrega al menos un producto', true); return; }
+  const btn = document.getElementById('btnRegistrarVenta');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  const telefono = document.getElementById('vpTelefono').value.trim();
+  const nombre = document.getElementById('vpNombre').value.trim();
+  let cliente = null;
+  if(telefono){
+    const {data, error} = await buscarOCrearCliente(telefono, nombre);
+    if(error){ toast('No se pudo registrar el cliente: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Registrar venta'; return; }
+    cliente = data;
+  }
+  const metodo = document.getElementById('vpMetodo').value;
+  if(metodo==='credito' && !cliente){ toast('Para vender a crédito, indica el teléfono del cliente', true); btn.disabled=false; btn.innerHTML='Registrar venta'; return; }
+  const total = CARRITO.reduce((a,b)=>a+b.precio*b.cantidad,0);
+  const {data: venta, error: errVenta} = await sb.from('ventas_productos').insert({
+    cliente_id: cliente?cliente.id:null, nombre_cliente: nombre?capitalizar(nombre):null,
+    metodo_pago: metodo, total_usd: total, vendedor_id: PERFIL.id
+  }).select().single();
+  if(errVenta){ toast('No se pudo registrar la venta: '+mensajeError(errVenta), true); btn.disabled=false; btn.innerHTML='Registrar venta'; return; }
+  for(const it of CARRITO){
+    const {error: errItem} = await sb.from('venta_items').insert({venta_id:venta.id, producto_id:it.producto_id, cantidad:it.cantidad, precio_unitario_usd:it.precio, subtotal_usd:it.precio*it.cantidad});
+    if(errItem){ toast('Venta creada, pero un producto no se pudo registrar: '+mensajeError(errItem), true); }
+  }
+  if(metodo==='credito' && cliente){ await registrarMovimientoCuenta(cliente.id, 'credito', total, 'Venta de productos a crédito', {referencia_venta_id: venta.id}); }
+  toast('Venta registrada'); CARRITO=[]; renderVenderProductos();
+}
+
+async function renderServiciosCatalogo(){
+  var body = document.getElementById('prodBody');
+  body.innerHTML = `<div class="section-head"><h2>Catálogo de servicios de lavado</h2><button class="btn btn-primary btn-sm" id="btnNuevoServicio"><i data-ic="plus"></i>Nuevo servicio</button></div><div class="card-list" id="listaServicios"></div>`;
+  drawIcons(body);
+  document.getElementById('btnNuevoServicio').addEventListener('click', ()=> modalServicio());
+  const {data, error} = await sb.from('servicios').select('*').order('tipo_vehiculo').order('nombre');
+  const cont = document.getElementById('listaServicios');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('droplet','Aún no has creado servicios de lavado'); return; }
+  cont.innerHTML = data.map(s=>`
+    <div class="item-row glass ${s.activo?'st-completada':'st-cancelada'}">
+      <span class="info"><span class="t1">${esc(s.nombre)} ${!s.activo?'<span class="badge b-cancelada">Inactivo</span>':''}</span>
+      <span class="t2">${labelTipoVeh(s.tipo_vehiculo)}${s.duracion_min?(' · ~'+s.duracion_min+' min'):''}</span></span>
+      <span class="amt mono">${fmtUsd(s.precio_usd)}</span>
+      <span class="acts"><button class="btn btn-glass btn-sm" onclick='abrirModalServicioJSON(${JSON.stringify(s)})'><i data-ic="pencil"></i></button></span>
+    </div>`).join('');
+  drawIcons(cont);
+}
+function abrirModalServicioJSON(s){ modalServicio(s); }
+function modalServicio(s){
+  s = s || {};
+  abrirModal(s.id?'Editar servicio':'Nuevo servicio', `
+    <label class="field-label">Nombre del servicio</label><input type="text" id="svNombre" value="${esc(s.nombre||'')}" placeholder="Lavado completo, básico, motor…">
+    <div class="form-row2">
+      <div><label class="field-label">Tipo de vehículo</label>
+        <select id="svTipo"><option value="carro" ${s.tipo_vehiculo==='carro'?'selected':''}>Carro</option><option value="moto" ${s.tipo_vehiculo==='moto'?'selected':''}>Moto</option><option value="camioneta" ${s.tipo_vehiculo==='camioneta'?'selected':''}>Camioneta</option><option value="otro" ${s.tipo_vehiculo==='otro'?'selected':''}>Otro</option></select></div>
+      <div><label class="field-label">Precio (USD)</label><input type="number" step="0.01" id="svPrecio" value="${s.precio_usd||0}"></div>
+    </div>
+    <label class="field-label">Duración estimada (minutos, opcional)</label><input type="number" id="svDuracion" value="${s.duracion_min||''}">
+    <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12.5px;font-weight:600;">
+      <span class="switch"><input type="checkbox" id="svActivo" ${s.activo!==false?'checked':''}><span class="track"></span></span> Servicio activo
+    </label>
+    <button class="btn btn-primary btn-block" id="btnGuardarServicio" style="margin-top:18px;">Guardar servicio</button>
+  `);
+  document.getElementById('btnGuardarServicio').addEventListener('click', async function(){
+    const btn=this; const nombre = document.getElementById('svNombre').value.trim();
+    if(!nombre){ toast('Escribe el nombre del servicio', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const payload = { nombre: capitalizar(nombre), tipo_vehiculo: document.getElementById('svTipo').value, precio_usd: Number(document.getElementById('svPrecio').value)||0, duracion_min: Number(document.getElementById('svDuracion').value)||null, activo: document.getElementById('svActivo').checked };
+    const q = s.id ? sb.from('servicios').update(payload).eq('id', s.id) : sb.from('servicios').insert(payload);
+    const {error} = await q;
+    if(error){ toast('No se pudo guardar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Guardar servicio'; return; }
+    toast('Servicio guardado'); cerrarModal(); renderServiciosCatalogo();
+  });
+}
+
+let COMPRA_ITEMS = [];
+async function renderCompras(){
+  COMPRA_ITEMS = [];
+  var body = document.getElementById('prodBody');
+  body.innerHTML = `<div class="section-head"><h2>Compras a proveedores</h2><button class="btn btn-primary btn-sm" id="btnNuevaCompra"><i data-ic="plus"></i>Nueva compra</button></div><div class="card-list" id="listaCompras"></div>`;
+  drawIcons(body);
+  document.getElementById('btnNuevaCompra').addEventListener('click', modalNuevaCompra);
+  const {data, error} = await sb.from('compras').select('*, proveedores(nombre)').order('created_at',{ascending:false}).limit(80);
+  const cont = document.getElementById('listaCompras');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('truck','Aún no has registrado compras'); return; }
+  cont.innerHTML = data.map(c=>`
+    <div class="item-row glass st-${esc(c.estado)}">
+      <span class="info"><span class="t1">${esc(c.proveedores?.nombre||'Proveedor sin especificar')} ${badge(c.estado)}</span>
+      <span class="t2">${c.numero_factura?('Factura '+esc(c.numero_factura)+' · '):''}${labelMetodoPago(c.metodo_pago)} · ${fmtFechaHora(c.created_at)}</span></span>
+      <span class="amt mono">${fmtUsd(c.total_usd)}</span>
+      <span class="acts">${!c.anulado?`<button class="btn btn-danger btn-sm" onclick="pedirAnularCompra('${c.id}')">Anular</button>`:''}</span>
+    </div>`).join('');
+  drawIcons(cont);
+}
+function pedirAnularCompra(id){
+  confirmarAccion('Anular compra', 'Esto revertirá el stock que ingresó esta compra. Escribe el motivo.', 'Anular compra', async (motivo)=>{
+    const {error} = await sb.rpc('anular_compra', {p_id:id, p_motivo:motivo});
+    if(error){ toast('No se pudo anular: '+mensajeError(error), true); return; }
+    toast('Compra anulada'); cerrarModal(); renderCompras();
+  }, true);
+}
+async function modalNuevaCompra(){
+  const [{data:proveedores}, {data:productos}] = await Promise.all([
+    sb.from('proveedores').select('*').order('nombre'), sb.from('productos').select('*').order('nombre')
+  ]);
+  abrirModal('Nueva compra', `
+    <label class="field-label">Proveedor</label>
+    <select id="cpProveedor"><option value="">— Sin especificar —</option>${(proveedores||[]).map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join('')}</select>
+    <div class="form-row2">
+      <div><label class="field-label">N° de factura (opcional)</label><input type="text" id="cpFactura"></div>
+      <div><label class="field-label">Método de pago</label><select id="cpMetodo"><option value="contado">Contado</option><option value="credito">A crédito (genera cuenta por pagar)</option></select></div>
+    </div>
+    <div class="divider"></div>
+    <label class="field-label">Agregar producto</label>
+    <select id="cpProducto">${(productos||[]).map(p=>`<option value="${p.id}" data-costo="${p.costo_usd}" data-nombre="${esc(p.nombre)}">${esc(p.nombre)}</option>`).join('')}</select>
+    <div class="form-row2" style="margin-top:8px;">
+      <div><input type="number" step="0.01" id="cpCantidad" placeholder="Cantidad"></div>
+      <div><input type="number" step="0.01" id="cpCostoUnit" placeholder="Costo unitario"></div>
+    </div>
+    <button class="btn btn-glass btn-block" id="btnAgregarItemCompra" style="margin-top:10px;"><i data-ic="plus"></i>Agregar ítem</button>
+    <div class="divider"></div>
+    <div id="compraLineas"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;">
+      <span style="font-size:13px;font-weight:700;">Total</span><span class="amt mono" id="compraTotal" style="font-size:18px;">$0.00</span>
+    </div>
+    <button class="btn btn-primary btn-block" id="btnGuardarCompra" style="margin-top:14px;">Registrar compra</button>
+  `, '480px');
+  drawIcons(document.getElementById('modalRoot'));
+  document.getElementById('cpProducto').addEventListener('change', function(){
+    const opt = this.selectedOptions[0]; if(opt) document.getElementById('cpCostoUnit').value = opt.dataset.costo;
+  });
+  document.getElementById('cpProducto').dispatchEvent(new Event('change'));
+  document.getElementById('btnAgregarItemCompra').addEventListener('click', function(){
+    const sel = document.getElementById('cpProducto'); const opt = sel.selectedOptions[0];
+    const cantidad = Number(document.getElementById('cpCantidad').value);
+    const costo = Number(document.getElementById('cpCostoUnit').value);
+    if(!opt || !cantidad || cantidad<=0){ toast('Indica un producto y una cantidad válida', true); return; }
+    COMPRA_ITEMS.push({producto_id:opt.value, nombre:opt.dataset.nombre, cantidad, costo});
+    pintarLineasCompra();
+    document.getElementById('cpCantidad').value='';
+  });
+  document.getElementById('btnGuardarCompra').addEventListener('click', guardarCompra);
+  pintarLineasCompra();
+}
+function pintarLineasCompra(){
+  const cont = document.getElementById('compraLineas');
+  if(COMPRA_ITEMS.length===0){ cont.innerHTML = emptyState('box','Aún no has agregado productos'); drawIcons(cont); document.getElementById('compraTotal').textContent='$0.00'; return; }
+  cont.innerHTML = COMPRA_ITEMS.map((it,i)=>`<div class="cart-line"><span class="cl-name">${esc(it.nombre)} × ${it.cantidad}</span><span class="cl-amt mono">${fmtUsd(it.costo*it.cantidad)}</span><button type="button" class="btn btn-ghost btn-icon" onclick="quitarItemCompra(${i})"><i data-ic="trash-2"></i></button></div>`).join('');
+  drawIcons(cont);
+  document.getElementById('compraTotal').textContent = fmtUsd(COMPRA_ITEMS.reduce((a,b)=>a+b.costo*b.cantidad,0));
+}
+function quitarItemCompra(i){ COMPRA_ITEMS.splice(i,1); pintarLineasCompra(); }
+async function guardarCompra(){
+  if(COMPRA_ITEMS.length===0){ toast('Agrega al menos un producto', true); return; }
+  const btn = document.getElementById('btnGuardarCompra');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  const proveedorId = document.getElementById('cpProveedor').value||null;
+  const metodo = document.getElementById('cpMetodo').value;
+  const total = COMPRA_ITEMS.reduce((a,b)=>a+b.costo*b.cantidad,0);
+  const {data: compra, error} = await sb.from('compras').insert({
+    proveedor_id:proveedorId, numero_factura: document.getElementById('cpFactura').value.trim()||null,
+    metodo_pago: metodo, total_usd: total, registrado_por: PERFIL.id
+  }).select().single();
+  if(error){ toast('No se pudo registrar la compra: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Registrar compra'; return; }
+  for(const it of COMPRA_ITEMS){
+    await sb.from('compra_items').insert({compra_id:compra.id, producto_id:it.producto_id, cantidad:it.cantidad, costo_unitario_usd:it.costo, subtotal_usd:it.costo*it.cantidad});
+  }
+  if(metodo==='credito' && proveedorId){
+    await sb.from('cuentas_por_pagar').insert({proveedor_id:proveedorId, concepto:'Compra'+(document.getElementById('cpFactura').value.trim()?(' factura '+document.getElementById('cpFactura').value.trim()):''), monto_total_usd: total, registrado_por: PERFIL.id});
+  }
+  toast('Compra registrada'); cerrarModal(); COMPRA_ITEMS=[]; renderCompras();
+}
+
+async function renderKardex(){
+  var body = document.getElementById('prodBody');
+  body.innerHTML = `<div class="section-head"><h2>Kardex — movimientos de inventario</h2></div><div class="card-list" id="listaKardex"></div>`;
+  const {data, error} = await sb.from('movimientos_inventario').select('*, productos(nombre)').order('created_at',{ascending:false}).limit(150);
+  const cont = document.getElementById('listaKardex');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('list','Todavía no hay movimientos de inventario'); return; }
+  cont.innerHTML = data.map(m=>`
+    <div class="item-row glass ${m.tipo==='entrada'?'st-completada':(m.tipo==='salida'?'st-vencida':'')}">
+      <span class="info"><span class="t1">${esc(m.productos?.nombre||'Producto')} <span class="chip">${m.tipo==='entrada'?'Entrada':m.tipo==='salida'?'Salida':'Ajuste'}</span></span>
+      <span class="t2">${esc(m.motivo||'')} · ${fmtFechaHora(m.created_at)}</span></span>
+      <span class="amt mono">${m.tipo==='salida'?'-':'+'}${esc(m.cantidad)}</span>
+    </div>`).join('');
+}
+
+/* =====================================================================
+   CUENTAS DE CLIENTES — CRÉDITOS Y DÉBITOS
+===================================================================== */
+async function cargarCuentasClientes(){
+  var c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="section-head"><h2>Créditos y débitos de clientes</h2><button class="btn btn-primary btn-sm" id="btnNuevoMovCliente"><i data-ic="plus"></i>Registrar movimiento</button></div>
+    <input type="text" id="fClienteBuscar" placeholder="Buscar cliente por nombre o teléfono…" style="margin-bottom:14px;">
+    <div class="card-list" id="listaCuentasClientes"></div>`;
+  drawIcons(c);
+  document.getElementById('btnNuevoMovCliente').addEventListener('click', ()=> modalMovimientoCliente());
+  document.getElementById('fClienteBuscar').addEventListener('input', debounce(buscarCuentasClientes, 260));
+  buscarCuentasClientes();
+}
+async function buscarCuentasClientes(){
+  const cont = document.getElementById('listaCuentasClientes');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const texto = document.getElementById('fClienteBuscar').value.trim();
+  let qc = sb.from('clientes').select('*').order('nombre');
+  if(texto) qc = qc.or(`nombre.ilike.%${texto}%,telefono.ilike.%${texto}%`);
+  const {data: clientes, error} = await qc.limit(200);
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  const {data: movs} = await sb.from('movimientos_cuenta_cliente').select('cliente_id,tipo,monto_usd').eq('anulado', false);
+  const saldos = {};
+  (movs||[]).forEach(m=>{ saldos[m.cliente_id] = (saldos[m.cliente_id]||0) + (m.tipo==='credito'?Number(m.monto_usd):-Number(m.monto_usd)); });
+  const conSaldo = (clientes||[]).filter(cl => texto || Math.abs(saldos[cl.id]||0) > 0.001).map(cl=> Object.assign({}, cl, {saldo: saldos[cl.id]||0}))
+    .sort((a,b)=> b.saldo - a.saldo);
+  if(conSaldo.length===0){ cont.innerHTML = emptyState('credit-card','No hay clientes con movimientos de crédito o débito'); return; }
+  cont.innerHTML = conSaldo.map(cl=>`
+    <div class="item-row glass clickable ${cl.saldo>0?'st-pendiente':(cl.saldo<0?'st-completada':'')}" onclick="verDetalleCliente('${cl.id}')">
+      <span class="info"><span class="t1">${esc(cl.nombre||'Sin nombre')}</span><span class="t2">${esc(cl.telefono)}</span></span>
+      <span class="amt mono" style="color:${cl.saldo>0?'var(--amber)':(cl.saldo<0?'var(--g1)':'var(--ink-soft)')};">${cl.saldo>0?'Debe ':(cl.saldo<0?'A favor ':'')}${fmtUsd(Math.abs(cl.saldo))}</span>
+    </div>`).join('');
+}
+async function verDetalleCliente(clienteId){
+  const [{data:cliente}, {data:movs}] = await Promise.all([
+    sb.from('clientes').select('*').eq('id', clienteId).single(),
+    sb.from('movimientos_cuenta_cliente').select('*').eq('cliente_id', clienteId).order('created_at',{ascending:false})
+  ]);
+  const saldo = (movs||[]).filter(m=>!m.anulado).reduce((a,b)=> a + (b.tipo==='credito'?Number(b.monto_usd):-Number(b.monto_usd)), 0);
+  const jefe = esJefeOAdmin();
+  abrirModal(cliente?.nombre||cliente?.telefono||'Cliente', `
+    <div class="saldo-hero glass">
+      <div class="amt mono" style="color:${saldo>0?'var(--amber)':'var(--g1)'};">${fmtUsd(Math.abs(saldo))}</div>
+      <div class="lbl">${saldo>0?'El cliente debe':(saldo<0?'Saldo a favor del cliente':'Cuenta al día')}</div>
+    </div>
+    <div class="form-row2">
+      <button class="btn btn-glass" id="btnRegCredito"><i data-ic="plus"></i>Registrar crédito</button>
+      <button class="btn btn-glass" id="btnRegDebito"><i data-ic="check"></i>Registrar abono</button>
+    </div>
+    <div class="divider"></div>
+    <div class="card-list">
+      ${(movs&&movs.length) ? movs.map(m=>`
+        <div class="item-row glass ${m.anulado?'st-anulado':(m.tipo==='credito'?'st-pendiente':'st-completada')}">
+          <span class="info"><span class="t1">${m.tipo==='credito'?'Crédito':'Abono'} ${m.anulado?badge('anulado'):''}</span>
+          <span class="t2">${esc(m.concepto||'')} · ${fmtFechaHora(m.created_at)}</span></span>
+          <span class="amt mono">${fmtUsd(m.monto_usd)}</span>
+          ${(!m.anulado && jefe)?`<span class="acts"><button class="btn btn-danger btn-sm" onclick="pedirAnularMovCliente('${m.id}','${clienteId}')">Anular</button></span>`:''}
+        </div>`).join('') : emptyState('list','Sin movimientos todavía')}
+    </div>
+  `, '460px');
+  drawIcons(document.getElementById('modalRoot'));
+  document.getElementById('btnRegCredito').addEventListener('click', ()=> modalMovimientoCliente(cliente, 'credito'));
+  document.getElementById('btnRegDebito').addEventListener('click', ()=> modalMovimientoCliente(cliente, 'debito'));
+}
+function pedirAnularMovCliente(id, clienteId){
+  confirmarAccion('Anular movimiento', 'Esta acción anulará el movimiento de la cuenta del cliente. Escribe el motivo.', 'Anular', async (motivo)=>{
+    const {error} = await sb.rpc('anular_movimiento_cuenta', {p_id:id, p_motivo:motivo});
+    if(error){ toast('No se pudo anular: '+mensajeError(error), true); return; }
+    toast('Movimiento anulado'); verDetalleCliente(clienteId);
+  }, true);
+}
+function modalMovimientoCliente(cliente, tipoFijo){
+  cliente = cliente || null;
+  abrirModal(tipoFijo==='credito'?'Registrar crédito':(tipoFijo==='debito'?'Registrar abono':'Registrar movimiento'), `
+    ${cliente?`<div class="chip" style="margin-bottom:10px;">${esc(cliente.nombre||cliente.telefono)}</div>`:`
+    <label class="field-label">Teléfono del cliente</label><input type="tel" id="mcTelefono">
+    <label class="field-label">Nombre del cliente</label><input type="text" id="mcNombre">`}
+    ${!tipoFijo?`<label class="field-label">Tipo de movimiento</label>
+    <div class="seg-mini"><button type="button" class="active" data-tipo="credito">Crédito (debe)</button><button type="button" data-tipo="debito">Abono (paga)</button></div>`:''}
+    <label class="field-label">Monto (USD)</label><input type="number" step="0.01" id="mcMonto">
+    <label class="field-label">Concepto</label><input type="text" id="mcConcepto" placeholder="Ej: fiado del lavado, abono en efectivo…">
+    <button class="btn btn-primary btn-block" id="btnGuardarMovCliente" style="margin-top:18px;">Guardar</button>
+  `);
+  let tipo = tipoFijo || 'credito';
+  document.querySelectorAll('.seg-mini [data-tipo]').forEach(b=> b.addEventListener('click', function(){
+    document.querySelectorAll('.seg-mini [data-tipo]').forEach(x=>x.classList.remove('active'));
+    this.classList.add('active'); tipo = this.dataset.tipo;
+  }));
+  document.getElementById('btnGuardarMovCliente').addEventListener('click', async function(){
+    const btn=this; const monto = Number(document.getElementById('mcMonto').value);
+    if(!monto || monto<=0){ toast('Escribe un monto válido', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    let cl = cliente;
+    if(!cl){
+      const telefono = document.getElementById('mcTelefono').value.trim();
+      const nombre = document.getElementById('mcNombre').value.trim();
+      if(!telefono){ toast('Escribe el teléfono del cliente', true); btn.disabled=false; btn.innerHTML='Guardar'; return; }
+      const {data, error} = await buscarOCrearCliente(telefono, nombre);
+      if(error){ toast('No se pudo registrar el cliente: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Guardar'; return; }
+      cl = data;
+    }
+    await registrarMovimientoCuenta(cl.id, tipo, monto, document.getElementById('mcConcepto').value.trim()||null);
+    toast('Movimiento registrado'); cerrarModal();
+    if(VISTA_ACTUAL==='cuentas_clientes') buscarCuentasClientes();
+  });
+}
+
+/* =====================================================================
+   FIDELIDAD
+===================================================================== */
+async function cargarFidelidad(){
+  var c = document.getElementById('content');
+  c.innerHTML = `<div class="section-head"><h2>Tarjetas de fidelidad</h2><button class="btn btn-primary btn-sm" id="btnNuevaTarjeta"><i data-ic="plus"></i>Nueva tarjeta</button></div><div class="card-list" id="listaFidelidad"></div>`;
+  drawIcons(c);
+  document.getElementById('btnNuevaTarjeta').addEventListener('click', modalNuevaTarjeta);
+  const umbral = CONFIG_GENERAL.umbral_fidelidad_sellos || 6;
+  const {data, error} = await sb.from('tarjetas_fidelidad').select('*, clientes(nombre, telefono)').order('created_at',{ascending:false});
+  const cont = document.getElementById('listaFidelidad');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('gem','Aún no hay tarjetas de fidelidad'); return; }
+  cont.innerHTML = data.map(t=>{
+    const pct = Math.min(100, Math.round((t.sellos/umbral)*100));
+    return `<div class="item-row glass" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span class="info"><span class="t1">${esc(t.clientes?.nombre||t.clientes?.telefono||'Cliente')}</span><span class="t2">${esc(t.clientes?.telefono||'')} · ${t.sellos}/${umbral} sellos</span></span>
+        <span class="chip">${t.lavados_gratis_disponibles} lavado(s) gratis</span>
+      </div>
+      <div class="progress-bar"><div class="fill" style="width:${pct}%;"></div></div>
+      <div class="acts" style="justify-content:flex-end;">
+        <button class="btn btn-glass btn-sm" onclick="ajustarFidelidad('${t.id}','sello',-1)">-1 sello</button>
+        <button class="btn btn-primary btn-sm" onclick="ajustarFidelidad('${t.id}','sello',1)">+1 sello</button>
+        <button class="btn btn-glass btn-sm" onclick="ajustarFidelidad('${t.id}','gratis',-1)">Usar gratis</button>
+      </div>
+    </div>`;
+  }).join('');
+  drawIcons(cont);
+}
+async function ajustarFidelidad(id, campo, delta){
+  const {data} = await sb.from('tarjetas_fidelidad').select('*').eq('id', id).single();
+  if(!data){ toast('No se pudo leer la tarjeta', true); return; }
+  const umbral = CONFIG_GENERAL.umbral_fidelidad_sellos || 6;
+  let patch;
+  if(campo==='sello'){
+    let sellos = Math.max(0, data.sellos+delta); let gratis = data.lavados_gratis_disponibles;
+    if(delta>0 && sellos>=umbral){ sellos=0; gratis+=1; toast('¡Sello completado! Lavado gratis otorgado'); }
+    patch = {sellos, lavados_gratis_disponibles:gratis};
+  } else {
+    patch = {lavados_gratis_disponibles: Math.max(0, data.lavados_gratis_disponibles+delta)};
+  }
+  const {error} = await sb.from('tarjetas_fidelidad').update(patch).eq('id', id);
+  if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
+  cargarFidelidad();
+}
+function modalNuevaTarjeta(){
+  abrirModal('Nueva tarjeta de fidelidad', `
+    <label class="field-label">Teléfono del cliente</label><input type="tel" id="tfTelefono">
+    <label class="field-label">Nombre del cliente</label><input type="text" id="tfNombre">
+    <button class="btn btn-primary btn-block" id="btnGuardarTarjeta" style="margin-top:18px;">Crear tarjeta</button>
+  `);
+  document.getElementById('btnGuardarTarjeta').addEventListener('click', async function(){
+    const btn=this; const telefono = document.getElementById('tfTelefono').value.trim();
+    const nombre = document.getElementById('tfNombre').value.trim();
+    if(!telefono){ toast('Escribe el teléfono del cliente', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {data: cliente, error: errCliente} = await buscarOCrearCliente(telefono, nombre);
+    if(errCliente){ toast('No se pudo registrar el cliente: '+mensajeError(errCliente), true); btn.disabled=false; btn.innerHTML='Crear tarjeta'; return; }
+    const {error} = await sb.from('tarjetas_fidelidad').insert({cliente_id: cliente.id});
+    if(error){ toast((error.message||'').includes('duplicate')?'Ese cliente ya tiene una tarjeta':('No se pudo crear: '+mensajeError(error)), true); btn.disabled=false; btn.innerHTML='Crear tarjeta'; return; }
+    toast('Tarjeta creada'); cerrarModal(); cargarFidelidad();
+  });
+}
+
+/* =====================================================================
+   SEGURO DE LLUVIA
+===================================================================== */
+async function cargarLluvia(){
+  var c = document.getElementById('content');
+  c.innerHTML = `<div class="section-head"><h2>Seguro de lluvia</h2><button class="btn btn-primary btn-sm" id="btnNuevoSeguro"><i data-ic="plus"></i>Nuevo seguro</button></div>
+    <div class="filters-row"><select id="fLluviaEstado"><option value="">Todos</option><option value="activo">Activos</option><option value="usado">Usados</option><option value="vencido">Vencidos</option></select></div>
+    <div class="card-list" id="listaLluvia"></div>`;
+  drawIcons(c);
+  document.getElementById('btnNuevoSeguro').addEventListener('click', modalNuevoSeguro);
+  document.getElementById('fLluviaEstado').addEventListener('change', buscarLluvia);
+  buscarLluvia();
+}
+async function buscarLluvia(){
+  const cont = document.getElementById('listaLluvia');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const {data, error} = await sb.from('seguros_lluvia').select('*, clientes(nombre, telefono)').order('fecha_lavado',{ascending:false}).limit(150);
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  const ahora = new Date();
+  const filtro = document.getElementById('fLluviaEstado').value;
+  let lista = (data||[]).map(s=>{
+    const estado = s.usado ? 'usado' : (new Date(s.vence_at) < ahora ? 'vencido' : 'activo');
+    return Object.assign({}, s, {estadoCalc: estado});
+  });
+  if(filtro) lista = lista.filter(s=> s.estadoCalc===filtro);
+  if(lista.length===0){ cont.innerHTML = emptyState('cloud-rain','No hay registros de seguro de lluvia'); return; }
+  const map = {activo:'confirmada', usado:'completada', vencido:'vencida'};
+  cont.innerHTML = lista.map(s=>`
+    <div class="item-row glass st-${map[s.estadoCalc]}">
+      <span class="info"><span class="t1">${esc(s.clientes?.nombre||s.clientes?.telefono||'Cliente')} ${badge(map[s.estadoCalc], {confirmada:'Activo',completada:'Usado',vencida:'Vencido'})}</span>
+      <span class="t2">Lavado: ${fmtFechaHora(s.fecha_lavado)} · Vence: ${fmtFechaHora(s.vence_at)}</span></span>
+      <span class="amt mono">${fmtUsd(s.precio_usd)}</span>
+      <span class="acts">${s.estadoCalc==='activo'?`<button class="btn btn-primary btn-sm" onclick="marcarLluviaUsada('${s.id}')">Marcar usado</button>`:''}</span>
+    </div>`).join('');
+}
+async function marcarLluviaUsada(id){
+  const {error} = await sb.from('seguros_lluvia').update({usado:true, fecha_uso: ahoraISO()}).eq('id', id);
+  if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
+  toast('Registrado como usado'); buscarLluvia();
+}
+async function modalNuevoSeguro(){
+  const {data: lavados} = await sb.from('lavados').select('id, nombre_cliente, cliente_id, fecha_lavado').eq('anulado', false).order('fecha_lavado',{ascending:false}).limit(40);
+  abrirModal('Nuevo seguro de lluvia', `
+    <label class="field-label">Lavado relacionado (opcional)</label>
+    <select id="slLavado"><option value="">— Sin vincular a un lavado —</option>${(lavados||[]).map(l=>`<option value="${l.id}" data-cliente="${l.cliente_id||''}">${esc(l.nombre_cliente)} — ${fmtFechaHora(l.fecha_lavado)}</option>`).join('')}</select>
+    <label class="field-label">Teléfono del cliente</label><input type="tel" id="slTelefono">
+    <label class="field-label">Nombre del cliente</label><input type="text" id="slNombre">
+    <label class="field-label">Precio (USD)</label><input type="number" step="0.01" id="slPrecio" value="${CONFIG_GENERAL.precio_seguro_lluvia_usd||1.5}">
+    <div class="help-text">Válido por ${CONFIG_GENERAL.horas_seguro_lluvia||48} horas desde el momento del lavado.</div>
+    <button class="btn btn-primary btn-block" id="btnGuardarSeguro" style="margin-top:18px;">Registrar seguro</button>
+  `);
+  document.getElementById('btnGuardarSeguro').addEventListener('click', async function(){
+    const btn=this; const telefono = document.getElementById('slTelefono').value.trim();
+    const nombre = document.getElementById('slNombre').value.trim();
+    if(!telefono){ toast('Escribe el teléfono del cliente', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {data: cliente, error: errCliente} = await buscarOCrearCliente(telefono, nombre);
+    if(errCliente){ toast('No se pudo registrar el cliente: '+mensajeError(errCliente), true); btn.disabled=false; btn.innerHTML='Registrar seguro'; return; }
+    const lavadoId = document.getElementById('slLavado').value || null;
+    const {error} = await sb.from('seguros_lluvia').insert({lavado_id:lavadoId, cliente_id:cliente.id, precio_usd: Number(document.getElementById('slPrecio').value)||0, fecha_lavado: ahoraISO()});
+    if(error){ toast('No se pudo registrar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Registrar seguro'; return; }
+    toast('Seguro registrado'); cerrarModal(); buscarLluvia();
+  });
+}
+
+/* =====================================================================
+   GASTOS
+===================================================================== */
+async function cargarGastos(){
+  var c = document.getElementById('content');
+  c.innerHTML = `<div class="section-head"><h2>Gastos</h2><button class="btn btn-primary btn-sm" id="btnNuevoGasto"><i data-ic="plus"></i>Nuevo gasto</button></div>
+    <div class="filters-row"><select id="fGastoCat"><option value="">Todas las categorías</option><option value="insumos">Insumos</option><option value="mantenimiento">Mantenimiento</option><option value="nomina">Nómina</option><option value="servicios">Servicios</option><option value="otros">Otros</option></select></div>
+    <div class="card-list" id="listaGastos"></div>`;
+  drawIcons(c);
+  document.getElementById('btnNuevoGasto').addEventListener('click', modalNuevoGasto);
+  document.getElementById('fGastoCat').addEventListener('change', buscarGastos);
+  buscarGastos();
+}
+async function buscarGastos(){
+  const cont = document.getElementById('listaGastos');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  let q = sb.from('gastos').select('*').order('fecha',{ascending:false}).limit(150);
+  const cat = document.getElementById('fGastoCat').value;
+  if(cat) q = q.eq('categoria', cat);
+  const {data, error} = await q;
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('wallet','No hay gastos registrados'); return; }
+  cont.innerHTML = data.map(g=>`
+    <div class="item-row glass">
+      <span class="info"><span class="t1">${esc(g.concepto)} <span class="chip">${capitalizar(g.categoria)}</span></span>
+      <span class="t2">${labelMetodoPago(g.metodo_pago)} · ${fmtFecha(g.fecha)}</span></span>
+      <span class="amt mono">${fmtUsd(g.monto_usd)}</span>
+      <span class="acts"><button class="btn btn-danger btn-sm" onclick="eliminarGasto('${g.id}')"><i data-ic="trash-2"></i></button></span>
+    </div>`).join('');
+  drawIcons(cont);
+}
+function eliminarGasto(id){
+  confirmarAccion('Eliminar gasto', 'Esta acción eliminará el registro del gasto de forma permanente.', 'Eliminar', async ()=>{
+    const {error} = await sb.from('gastos').delete().eq('id', id);
+    if(error){ toast('No se pudo eliminar: '+mensajeError(error), true); return; }
+    toast('Gasto eliminado'); cerrarModal(); buscarGastos();
+  });
+}
+function modalNuevoGasto(){
+  abrirModal('Nuevo gasto', `
+    <label class="field-label">Concepto</label><input type="text" id="gsConcepto" placeholder="Ej: compra de detergente">
+    <div class="form-row2">
+      <div><label class="field-label">Categoría</label><select id="gsCategoria"><option value="insumos">Insumos</option><option value="mantenimiento">Mantenimiento</option><option value="nomina">Nómina</option><option value="servicios">Servicios</option><option value="otros">Otros</option></select></div>
+      <div><label class="field-label">Monto (USD)</label><input type="number" step="0.01" id="gsMonto"></div>
+    </div>
+    <div class="form-row2">
+      <div><label class="field-label">Método de pago</label><select id="gsMetodo"><option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option></select></div>
+      <div><label class="field-label">Fecha</label><input type="date" id="gsFecha" value="${hoy()}"></div>
+    </div>
+    <label class="field-label">Notas (opcional)</label><textarea id="gsNotas"></textarea>
+    <button class="btn btn-primary btn-block" id="btnGuardarGasto" style="margin-top:18px;">Registrar gasto</button>
+  `);
+  document.getElementById('btnGuardarGasto').addEventListener('click', async function(){
+    const btn=this; const concepto = document.getElementById('gsConcepto').value.trim();
+    const monto = Number(document.getElementById('gsMonto').value);
+    if(!concepto || !monto){ toast('Completa el concepto y el monto', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {error} = await sb.from('gastos').insert({concepto, categoria: document.getElementById('gsCategoria').value, monto_usd: monto, metodo_pago: document.getElementById('gsMetodo').value, fecha: document.getElementById('gsFecha').value, notas: document.getElementById('gsNotas').value.trim()||null, registrado_por: PERFIL.id});
+    if(error){ toast('No se pudo registrar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Registrar gasto'; return; }
+    toast('Gasto registrado'); cerrarModal(); buscarGastos();
+  });
+}
+
+/* =====================================================================
+   CUENTAS POR PAGAR + PROVEEDORES
+===================================================================== */
+let CXP_TAB = 'cuentas';
+function cargarCxpTab(){ CXP_TAB='cuentas'; pintarTabsCxp(); }
+function pintarTabsCxp(){
+  var c = document.getElementById('content');
+  c.innerHTML = `<div class="tabs-row" id="cxpTabs"></div><div id="cxpBody"></div>`;
+  const tabs = [{id:'cuentas',label:'Cuentas por pagar'},{id:'proveedores',label:'Proveedores'}];
+  document.getElementById('cxpTabs').innerHTML = tabs.map(t=>`<button class="tab-btn ${t.id===CXP_TAB?'active':''}" data-t="${t.id}">${esc(t.label)}</button>`).join('');
+  document.getElementById('cxpTabs').querySelectorAll('[data-t]').forEach(b=> b.addEventListener('click', ()=>{ CXP_TAB=b.dataset.t; pintarTabsCxp(); }));
+  (CXP_TAB==='cuentas'?renderCuentasPorPagar:renderProveedores)();
+}
+async function renderCuentasPorPagar(){
+  var body = document.getElementById('cxpBody');
+  body.innerHTML = `<div class="section-head"><h2>Cuentas por pagar</h2><button class="btn btn-primary btn-sm" id="btnNuevaCxp"><i data-ic="plus"></i>Nueva cuenta</button></div><div class="card-list" id="listaCxp"></div>`;
+  drawIcons(body);
+  document.getElementById('btnNuevaCxp').addEventListener('click', modalNuevaCxp);
+  const {data, error} = await sb.from('cuentas_por_pagar').select('*, proveedores(nombre)').order('created_at',{ascending:false});
+  const cont = document.getElementById('listaCxp');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('receipt','No hay cuentas por pagar registradas'); return; }
+  const hoyStr = hoy();
+  cont.innerHTML = data.map(c=>{
+    const saldo = Number(c.monto_total_usd)-Number(c.monto_pagado_usd);
+    const vencida = c.fecha_vencimiento && c.fecha_vencimiento < hoyStr && c.estado!=='pagada';
+    return `<div class="item-row glass clickable st-${vencida?'vencida':c.estado}" onclick="verDetalleCxp('${c.id}')">
+      <span class="info"><span class="t1">${esc(c.proveedores?.nombre||'Proveedor sin especificar')} ${badge(vencida?'vencida':c.estado)}</span>
+      <span class="t2">${esc(c.concepto)}${c.fecha_vencimiento?(' · vence '+fmtFecha(c.fecha_vencimiento)):''}</span></span>
+      <span class="amt mono">${fmtUsd(saldo)} <span style="color:var(--ink-faint);font-weight:500;">/ ${fmtUsd(c.monto_total_usd)}</span></span>
+    </div>`;
+  }).join('');
+}
+async function verDetalleCxp(id){
+  const [{data:cuenta}, {data:pagos}] = await Promise.all([
+    sb.from('cuentas_por_pagar').select('*, proveedores(nombre)').eq('id', id).single(),
+    sb.from('pagos_cuentas_por_pagar').select('*').eq('cuenta_id', id).order('created_at',{ascending:false})
+  ]);
+  const saldo = Number(cuenta.monto_total_usd)-Number(cuenta.monto_pagado_usd);
+  abrirModal(cuenta.proveedores?.nombre||'Cuenta por pagar', `
+    <div class="saldo-hero glass"><div class="amt mono">${fmtUsd(saldo)}</div><div class="lbl">Saldo pendiente de ${fmtUsd(cuenta.monto_total_usd)}</div></div>
+    <div class="t2" style="margin-bottom:10px;">${esc(cuenta.concepto)}${cuenta.fecha_vencimiento?(' · Vence '+fmtFecha(cuenta.fecha_vencimiento)):''}</div>
+    ${saldo>0.001?`<button class="btn btn-primary btn-block" id="btnRegPago">Registrar pago</button>`:''}
+    <div class="divider"></div>
+    <div class="card-list">
+      ${(pagos&&pagos.length)?pagos.map(p=>`
+        <div class="item-row glass ${p.anulado?'st-anulado':'st-completada'}">
+          <span class="info"><span class="t1">Pago ${p.anulado?badge('anulado'):''}</span><span class="t2">${labelMetodoPago(p.metodo_pago)} · ${fmtFecha(p.fecha)}</span></span>
+          <span class="amt mono">${fmtUsd(p.monto_usd)}</span>
+          ${!p.anulado?`<span class="acts"><button class="btn btn-danger btn-sm" onclick="pedirAnularPagoCxp('${p.id}','${id}')">Anular</button></span>`:''}
+        </div>`).join(''):emptyState('list','Sin pagos registrados')}
+    </div>
+  `, '460px');
+  drawIcons(document.getElementById('modalRoot'));
+  const btnPago = document.getElementById('btnRegPago');
+  if(btnPago) btnPago.addEventListener('click', ()=> modalRegistrarPagoCxp(id, saldo));
+}
+function pedirAnularPagoCxp(pagoId, cuentaId){
+  confirmarAccion('Anular pago', 'Esta acción anulará el pago registrado. Escribe el motivo.', 'Anular pago', async (motivo)=>{
+    const {error} = await sb.rpc('anular_pago_cxp', {p_id:pagoId, p_motivo:motivo});
+    if(error){ toast('No se pudo anular: '+mensajeError(error), true); return; }
+    toast('Pago anulado'); verDetalleCxp(cuentaId);
+  }, true);
+}
+function modalRegistrarPagoCxp(cuentaId, saldo){
+  abrirModal('Registrar pago', `
+    <label class="field-label">Monto a pagar (USD)</label><input type="number" step="0.01" id="pgMonto" value="${saldo.toFixed(2)}">
+    <label class="field-label">Método de pago</label><select id="pgMetodo"><option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option></select>
+    <label class="field-label">Fecha</label><input type="date" id="pgFecha" value="${hoy()}">
+    <button class="btn btn-primary btn-block" id="btnGuardarPagoCxp" style="margin-top:18px;">Registrar pago</button>
+  `);
+  document.getElementById('btnGuardarPagoCxp').addEventListener('click', async function(){
+    const btn=this; const monto = Number(document.getElementById('pgMonto').value);
+    if(!monto || monto<=0){ toast('Escribe un monto válido', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {error} = await sb.from('pagos_cuentas_por_pagar').insert({cuenta_id:cuentaId, monto_usd:monto, metodo_pago: document.getElementById('pgMetodo').value, fecha: document.getElementById('pgFecha').value, registrado_por: PERFIL.id});
+    if(error){ toast('No se pudo registrar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Registrar pago'; return; }
+    toast('Pago registrado'); cerrarModal(); renderCuentasPorPagar();
+  });
+}
+function modalNuevaCxp(){
+  sb.from('proveedores').select('*').order('nombre').then(({data:proveedores})=>{
+    abrirModal('Nueva cuenta por pagar', `
+      <label class="field-label">Proveedor</label><select id="ncxProveedor"><option value="">— Sin especificar —</option>${(proveedores||[]).map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join('')}</select>
+      <label class="field-label">Concepto</label><input type="text" id="ncxConcepto" placeholder="Ej: factura de repuestos">
+      <div class="form-row2">
+        <div><label class="field-label">Monto total (USD)</label><input type="number" step="0.01" id="ncxMonto"></div>
+        <div><label class="field-label">Fecha de vencimiento</label><input type="date" id="ncxVence"></div>
+      </div>
+      <button class="btn btn-primary btn-block" id="btnGuardarCxp" style="margin-top:18px;">Registrar cuenta</button>
+    `);
+    document.getElementById('btnGuardarCxp').addEventListener('click', async function(){
+      const btn=this; const concepto = document.getElementById('ncxConcepto').value.trim();
+      const monto = Number(document.getElementById('ncxMonto').value);
+      if(!concepto || !monto){ toast('Completa el concepto y el monto', true); return; }
+      btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+      const {error} = await sb.from('cuentas_por_pagar').insert({proveedor_id: document.getElementById('ncxProveedor').value||null, concepto, monto_total_usd: monto, fecha_vencimiento: document.getElementById('ncxVence').value||null, registrado_por: PERFIL.id});
+      if(error){ toast('No se pudo registrar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Registrar cuenta'; return; }
+      toast('Cuenta registrada'); cerrarModal(); renderCuentasPorPagar();
+    });
+  });
+}
+async function renderProveedores(){
+  var body = document.getElementById('cxpBody');
+  body.innerHTML = `<div class="section-head"><h2>Proveedores</h2><button class="btn btn-primary btn-sm" id="btnNuevoProveedor"><i data-ic="plus"></i>Nuevo proveedor</button></div><div class="card-list" id="listaProveedores"></div>`;
+  drawIcons(body);
+  document.getElementById('btnNuevoProveedor').addEventListener('click', modalNuevoProveedor);
+  const {data, error} = await sb.from('proveedores').select('*').order('nombre');
+  const cont = document.getElementById('listaProveedores');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('truck','No hay proveedores registrados'); return; }
+  cont.innerHTML = data.map(p=>`<div class="item-row glass"><span class="info"><span class="t1">${esc(p.nombre)}</span><span class="t2">${esc(p.telefono||'')}${p.email?(' · '+esc(p.email)):''}</span></span></div>`).join('');
+}
+function modalNuevoProveedor(){
+  abrirModal('Nuevo proveedor', `
+    <label class="field-label">Nombre</label><input type="text" id="prNombre">
+    <label class="field-label">Teléfono</label><input type="tel" id="prTelefono">
+    <label class="field-label">Correo (opcional)</label><input type="email" id="prEmail">
+    <label class="field-label">Notas (opcional)</label><textarea id="prNotas"></textarea>
+    <button class="btn btn-primary btn-block" id="btnGuardarProveedor" style="margin-top:18px;">Guardar proveedor</button>
+  `);
+  document.getElementById('btnGuardarProveedor').addEventListener('click', async function(){
+    const btn=this; const nombre = document.getElementById('prNombre').value.trim();
+    if(!nombre){ toast('Escribe el nombre del proveedor', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {error} = await sb.from('proveedores').insert({nombre: capitalizar(nombre), telefono: document.getElementById('prTelefono').value.trim()||null, email: document.getElementById('prEmail').value.trim()||null, notas: document.getElementById('prNotas').value.trim()||null});
+    if(error){ toast('No se pudo guardar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Guardar proveedor'; return; }
+    toast('Proveedor guardado'); cerrarModal(); renderProveedores();
+  });
+}
+
+/* =====================================================================
+   USUARIOS (solo admin)
+===================================================================== */
+async function cargarUsuarios(){
+  var c = document.getElementById('content');
+  c.innerHTML = `<div class="section-head"><h2>Usuarios del sistema</h2><button class="btn btn-primary btn-sm" id="btnNuevoUsuario"><i data-ic="user-plus"></i>Nuevo usuario</button></div><div class="card-list" id="listaUsuarios"></div>`;
+  drawIcons(c);
+  document.getElementById('btnNuevoUsuario').addEventListener('click', modalNuevoUsuario);
+  const {data, error} = await sb.from('perfiles').select('*').order('created_at');
+  const cont = document.getElementById('listaUsuarios');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  cont.innerHTML = (data||[]).map(u=>`
+    <div class="item-row glass">
+      <span class="info"><span class="t1">${esc(u.nombre_completo)} <span class="badge b-rol-${esc(u.rol)}">${esc(u.rol)}</span></span><span class="t2">Desde ${fmtFecha(u.created_at)}</span></span>
+      <span class="acts">
+        ${u.id!==PERFIL.id?`<select onchange="cambiarRolUsuario('${u.id}', this.value)" style="width:auto;padding:7px 10px;font-size:11.5px;">
+          <option value="vendedor" ${u.rol==='vendedor'?'selected':''}>Vendedor</option>
+          <option value="jefe" ${u.rol==='jefe'?'selected':''}>Jefe</option>
+          <option value="admin" ${u.rol==='admin'?'selected':''}>Admin</option>
+        </select>
+        <span class="switch"><input type="checkbox" ${u.activo?'checked':''} onchange="cambiarActivoUsuario('${u.id}', this.checked)"><span class="track"></span></span>`:'<span class="chip">Tú</span>'}
+      </span>
+    </div>`).join('');
+}
+async function cambiarRolUsuario(id, rol){
+  const {error} = await sb.from('perfiles').update({rol}).eq('id', id);
+  if(error){ toast('No se pudo cambiar el rol: '+mensajeError(error), true); return; }
+  toast('Rol actualizado');
+}
+async function cambiarActivoUsuario(id, activo){
+  const {error} = await sb.from('perfiles').update({activo}).eq('id', id);
+  if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
+  toast(activo?'Usuario activado':'Usuario desactivado');
+}
+function modalNuevoUsuario(){
+  abrirModal('Nuevo usuario', `
+    <label class="field-label">Nombre completo</label><input type="text" id="usNombre">
+    <label class="field-label">Correo</label><input type="email" id="usEmail">
+    <label class="field-label">Contraseña temporal</label><input type="text" id="usPass" placeholder="Mínimo 6 caracteres">
+    <label class="field-label">Rol</label>
+    <select id="usRol"><option value="vendedor">Vendedor</option><option value="jefe">Jefe</option><option value="admin">Admin</option></select>
+    <div class="help-text">El usuario podrá iniciar sesión de inmediato con este correo y contraseña. Pídele que la cambie luego desde su cuenta.</div>
+    <button class="btn btn-primary btn-block" id="btnGuardarUsuario" style="margin-top:18px;">Crear usuario</button>
+  `);
+  document.getElementById('btnGuardarUsuario').addEventListener('click', async function(){
+    const btn=this;
+    const nombre = document.getElementById('usNombre').value.trim();
+    const email = document.getElementById('usEmail').value.trim();
+    const pass = document.getElementById('usPass').value;
+    const rol = document.getElementById('usRol').value;
+    if(!nombre || !email || !pass){ toast('Completa todos los campos', true); return; }
+    if(pass.length < 6){ toast('La contraseña debe tener al menos 6 caracteres', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Creando…';
+    // Se usa un cliente temporal, sin persistir sesión, para no reemplazar
+    // la sesión activa del administrador que está creando el usuario.
+    const tempClient = crearClienteSeguro({auth:{persistSession:false, autoRefreshToken:false}});
+    const {data, error} = await tempClient.auth.signUp({email, password:pass, options:{data:{nombre_completo: capitalizar(nombre), rol}}});
+    if(error){ toast('No se pudo crear el usuario: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Crear usuario'; return; }
+    toast('Usuario creado'); cerrarModal(); cargarUsuarios();
+  });
+}
+
+/* =====================================================================
+   CONFIGURACIÓN (solo admin)
+===================================================================== */
+async function cargarConfigTab(){
+  const {data: cfg} = await sb.from('config_general').select('*').eq('id',1).single();
+  CONFIG_GENERAL = cfg || CONFIG_GENERAL;
+  var c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="section-head"><h2>Configuración general</h2></div>
+    <div class="stat-card glass" style="max-width:520px; padding:20px;">
+      <label class="field-label" style="margin-top:0;">Precio del seguro de lluvia (USD)</label>
+      <input type="number" step="0.01" id="cfgSeguro" value="${CONFIG_GENERAL.precio_seguro_lluvia_usd ?? 1.5}">
+      <label class="field-label">Horas de validez del seguro de lluvia</label>
+      <input type="number" id="cfgHoras" value="${CONFIG_GENERAL.horas_seguro_lluvia ?? 48}">
+      <label class="field-label">Sellos necesarios para un lavado gratis</label>
+      <input type="number" id="cfgUmbral" value="${CONFIG_GENERAL.umbral_fidelidad_sellos ?? 6}">
+      <label class="field-label">WhatsApp del negocio</label>
+      <input type="text" id="cfgWhatsapp" value="${esc(CONFIG_GENERAL.whatsapp_negocio ?? '')}">
+      <label class="field-label">Instagram (usuario o enlace)</label>
+      <input type="text" id="cfgInstagram" value="${esc(CONFIG_GENERAL.instagram_negocio ?? '')}">
+      <label class="field-label">Facebook (usuario o enlace)</label>
+      <input type="text" id="cfgFacebook" value="${esc(CONFIG_GENERAL.facebook_negocio ?? '')}">
+      <label class="field-label">TikTok (usuario o enlace)</label>
+      <input type="text" id="cfgTiktok" value="${esc(CONFIG_GENERAL.tiktok_negocio ?? '')}">
+      <button class="btn btn-primary" style="margin-top:18px;" id="btnGuardarConfig">Guardar cambios</button>
+    </div>`;
+  drawIcons(c);
+  document.getElementById('btnGuardarConfig').addEventListener('click', async function(){
+    const btn=this; btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const payload = {
+      precio_seguro_lluvia_usd: Number(document.getElementById('cfgSeguro').value)||0,
+      horas_seguro_lluvia: Number(document.getElementById('cfgHoras').value)||48,
+      umbral_fidelidad_sellos: Number(document.getElementById('cfgUmbral').value)||6,
+      whatsapp_negocio: document.getElementById('cfgWhatsapp').value.trim()||null,
+      instagram_negocio: document.getElementById('cfgInstagram').value.trim()||null,
+      facebook_negocio: document.getElementById('cfgFacebook').value.trim()||null,
+      tiktok_negocio: document.getElementById('cfgTiktok').value.trim()||null,
+      updated_at: ahoraISO()
+    };
+    const {error} = await sb.from('config_general').update(payload).eq('id',1);
+    btn.disabled=false; btn.innerHTML='Guardar cambios';
+    if(error){ toast('No se pudo guardar: '+mensajeError(error), true); return; }
+    CONFIG_GENERAL = Object.assign(CONFIG_GENERAL, payload);
+    toast('Configuración guardada');
+  });
+}
+</script>
+</body>
+</html>
