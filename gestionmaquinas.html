@@ -394,7 +394,11 @@ function ahoraISO(){ return new Date().toISOString(); }
 function fmtFecha(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('es-VE',{day:'2-digit',month:'short',year:'numeric'}); }
 function fmtFechaHora(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleString('es-VE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
 function labelTipoVeh(t){ return {moto:'Moto',carro:'Carro',camioneta:'Camioneta',otro:'Otro'}[t]||t||''; }
-function labelMetodoPago(m){ return {efectivo:'Efectivo',pago_movil:'Pago móvil',transferencia:'Transferencia',tarjeta:'Tarjeta',zelle:'Zelle',credito:'Crédito',contado:'Contado'}[m]||m||''; }
+function labelMetodoPago(m){ return {efectivo:'Efectivo',efectivo_bs:'Efectivo (Bs)',efectivo_divisa:'Efectivo (Divisa)',pago_movil:'Pago móvil',transferencia:'Transferencia',tarjeta:'Tarjeta',zelle:'Zelle',credito:'Crédito',contado:'Contado'}[m]||m||''; }
+const METODOS_PAGO = [['efectivo_bs','Efectivo (Bs)'],['efectivo_divisa','Efectivo (Divisa)'],['pago_movil','Pago móvil'],['transferencia','Transferencia'],['tarjeta','Tarjeta'],['zelle','Zelle'],['credito','Crédito (a la cuenta del cliente)']];
+function opcionesMetodoPago(seleccionado){
+  return METODOS_PAGO.map(([v,l])=>`<option value="${v}" ${seleccionado===v?'selected':''}>${esc(l)}</option>`).join('');
+}
 function badge(estado, labelMap){
   var label = (labelMap && labelMap[estado]) || capitalizar(String(estado||'').replace(/_/g,' '));
   return '<span class="badge b-'+esc(estado)+'">'+esc(label)+'</span>';
@@ -796,6 +800,7 @@ async function buscarLavados(){
       <span class="amt mono">${fmtUsd(l.precio_usd)}</span>
       <span class="acts">
         ${l.estado==='en_proceso'?`<button class="btn btn-primary btn-sm" onclick='completarLavado(${JSON.stringify(l)})'>Completar</button>`:''}
+        ${!l.anulado?`<button class="btn btn-glass btn-sm" onclick='abrirTicketLavado(${JSON.stringify(l)})'><i data-ic="receipt"></i>Ticket</button>`:''}
         ${(!l.anulado && esJefeOAdmin())?`<button class="btn btn-danger btn-sm" onclick="pedirAnularLavado('${l.id}')">Anular</button>`:''}
       </span>
     </div>
@@ -839,6 +844,135 @@ function pedirAnularLavado(id){
     toast('Lavado anulado'); cerrarModal(); buscarLavados();
   }, true);
 }
+
+/* =====================================================================
+   TICKET DEL LAVADO — agregar productos/servicios extra, cobro/abono,
+   método de pago e impresión del recibo (impresora de tickets)
+===================================================================== */
+async function abrirTicketLavado(lavado){
+  const [{data: extras}, {data: productos}, {data: servicios}] = await Promise.all([
+    sb.from('lavado_extras').select('*').eq('lavado_id', lavado.id).order('created_at'),
+    sb.from('productos').select('*').eq('activo', true).gt('stock',0).order('nombre'),
+    sb.from('servicios').select('*').eq('activo', true).order('nombre')
+  ]);
+  const listaExtras = extras || [];
+  const total = Number(lavado.precio_usd) + listaExtras.reduce((a,b)=>a+Number(b.subtotal_usd),0);
+  const enProceso = lavado.estado === 'en_proceso';
+  const opcionesProd = (productos||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_usd}" data-nombre="${esc(p.nombre)}">${esc(p.nombre)} — ${fmtUsd(p.precio_usd)}</option>`).join('');
+  const opcionesServ = (servicios||[]).map(s=>`<option value="${s.id}" data-precio="${s.precio_usd}" data-nombre="${esc(s.nombre)}">${esc(s.nombre)} — ${fmtUsd(s.precio_usd)}</option>`).join('');
+
+  abrirModal('Ticket del lavado', `
+    <div class="chip" style="margin-bottom:12px;">${esc(lavado.nombre_cliente)} · ${esc(labelTipoVeh(lavado.tipo_vehiculo))}${lavado.placa?(' · '+esc(lavado.placa)):''}</div>
+    <div class="item-row glass" style="margin-bottom:8px;">
+      <span class="info"><span class="t1">Lavado</span><span class="t2">Servicio base</span></span>
+      <span class="amt mono">${fmtUsd(lavado.precio_usd)}</span>
+    </div>
+    <div id="ticketExtrasLista">
+      ${listaExtras.map(e=>`
+        <div class="item-row glass" style="margin-bottom:8px;">
+          <span class="info"><span class="t1">${esc(e.descripcion)}</span><span class="t2">${e.cantidad>1?(e.cantidad+' × '+fmtUsd(e.precio_unitario_usd)):(e.tipo==='producto'?'Producto':'Servicio adicional')}</span></span>
+          <span class="amt mono">${fmtUsd(e.subtotal_usd)}</span>
+          ${enProceso?`<button class="btn btn-ghost btn-icon quitar-extra" data-id="${e.id}" type="button"><i data-ic="trash-2"></i></button>`:''}
+        </div>`).join('')}
+    </div>
+    ${enProceso?`
+    <div class="divider"></div>
+    <label class="field-label" style="margin-top:0;">Agregar producto (repuesto, consumible o accesorio)</label>
+    <select id="tkProducto"><option value="">Selecciona un producto…</option>${opcionesProd}</select>
+    <div class="form-row2" style="margin-top:8px;">
+      <input type="number" step="0.01" id="tkCantidad" placeholder="Cantidad" value="1">
+      <button class="btn btn-glass" id="btnAgregarExtraProducto" type="button"><i data-ic="plus"></i>Agregar</button>
+    </div>
+    <label class="field-label">Agregar otro servicio</label>
+    <select id="tkServicio"><option value="">Selecciona un servicio…</option>${opcionesServ}</select>
+    <button class="btn btn-glass btn-block" id="btnAgregarExtraServicio" type="button" style="margin-top:8px;"><i data-ic="plus"></i>Agregar servicio</button>
+    `:''}
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-weight:700;font-size:13.5px;">Total a cobrar</span>
+      <span class="amt mono" style="font-size:19px;">${fmtUsd(total)}</span>
+    </div>
+    <label class="field-label">Método de pago</label>
+    <select id="tkMetodo">${opcionesMetodoPago(lavado.metodo_pago)}</select>
+    <div class="form-row2" style="margin-top:16px;">
+      <button class="btn btn-glass" id="btnCobroAbono" type="button"><i data-ic="credit-card"></i>Cobro / Abono</button>
+      <button class="btn btn-primary" id="btnImprimirRecibo" type="button"><i data-ic="receipt"></i>Imprimir</button>
+    </div>
+  `, '480px');
+  drawIcons(document.getElementById('modalRoot'));
+
+  document.querySelectorAll('.quitar-extra').forEach(btn=> btn.addEventListener('click', async function(){
+    const {error} = await sb.from('lavado_extras').delete().eq('id', this.dataset.id);
+    if(error){ toast('No se pudo quitar: '+mensajeError(error), true); return; }
+    toast('Ítem quitado del ticket'); abrirTicketLavado(lavado);
+  }));
+  const btnProd = document.getElementById('btnAgregarExtraProducto');
+  if(btnProd) btnProd.addEventListener('click', async function(){
+    const sel = document.getElementById('tkProducto'); const opt = sel.selectedOptions[0];
+    const cantidad = Number(document.getElementById('tkCantidad').value)||0;
+    if(!opt || !opt.value || cantidad<=0){ toast('Selecciona un producto y una cantidad válida', true); return; }
+    const precio = Number(opt.dataset.precio);
+    const {error} = await sb.from('lavado_extras').insert({lavado_id:lavado.id, tipo:'producto', producto_id:opt.value, descripcion:opt.dataset.nombre, cantidad, precio_unitario_usd:precio, subtotal_usd:precio*cantidad, creado_por:PERFIL.id});
+    if(error){ toast('No se pudo agregar: '+mensajeError(error), true); return; }
+    toast('Producto agregado al ticket'); abrirTicketLavado(lavado);
+  });
+  const btnServ = document.getElementById('btnAgregarExtraServicio');
+  if(btnServ) btnServ.addEventListener('click', async function(){
+    const sel = document.getElementById('tkServicio'); const opt = sel.selectedOptions[0];
+    if(!opt || !opt.value){ toast('Selecciona un servicio', true); return; }
+    const precio = Number(opt.dataset.precio);
+    const {error} = await sb.from('lavado_extras').insert({lavado_id:lavado.id, tipo:'servicio', servicio_id:opt.value, descripcion:opt.dataset.nombre, cantidad:1, precio_unitario_usd:precio, subtotal_usd:precio, creado_por:PERFIL.id});
+    if(error){ toast('No se pudo agregar: '+mensajeError(error), true); return; }
+    toast('Servicio agregado al ticket'); abrirTicketLavado(lavado);
+  });
+  document.getElementById('tkMetodo').addEventListener('change', async function(){
+    const {error} = await sb.from('lavados').update({metodo_pago:this.value}).eq('id', lavado.id);
+    if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
+    lavado.metodo_pago = this.value; toast('Método de pago actualizado');
+  });
+  document.getElementById('btnCobroAbono').addEventListener('click', function(){
+    modalMovimientoCliente({id: lavado.cliente_id, nombre: lavado.nombre_cliente, telefono: lavado.telefono});
+  });
+  document.getElementById('btnImprimirRecibo').addEventListener('click', ()=> imprimirReciboLavado(lavado));
+}
+
+async function imprimirReciboLavado(lavado){
+  const {data: extras} = await sb.from('lavado_extras').select('*').eq('lavado_id', lavado.id).order('created_at');
+  const total = Number(lavado.precio_usd) + (extras||[]).reduce((a,b)=>a+Number(b.subtotal_usd),0);
+  const lineas = [{descripcion: 'Lavado — '+labelTipoVeh(lavado.tipo_vehiculo), monto: lavado.precio_usd}]
+    .concat((extras||[]).map(e=>({descripcion: e.cantidad>1?(e.descripcion+' × '+e.cantidad):e.descripcion, monto: e.subtotal_usd})));
+  const win = window.open('', '_blank', 'width=380,height=640');
+  if(!win){ toast('El navegador bloqueó la ventana de impresión, permite las ventanas emergentes', true); return; }
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo</title>
+  <style>
+    @page{ size: 80mm auto; margin:4mm; }
+    *{ box-sizing:border-box; }
+    body{ font-family:'Courier New',monospace; font-size:12px; color:#000; width:72mm; margin:0 auto; padding:6px; }
+    h1{ font-size:14px; text-align:center; margin:0 0 2px; }
+    .center{ text-align:center; }
+    .line{ border-top:1px dashed #000; margin:7px 0; }
+    .row{ display:flex; justify-content:space-between; gap:8px; }
+    .tot{ font-weight:bold; font-size:13.5px; }
+    .foot{ text-align:center; margin-top:12px; font-size:11px; line-height:1.5; }
+  </style></head><body>
+    <h1>MÁQUINAS AUTOSERVICIOS</h1>
+    <div class="center">${esc(new Date().toLocaleString('es-VE'))}</div>
+    <div class="line"></div>
+    <div>Cliente: ${esc(lavado.nombre_cliente)}</div>
+    <div>Vehículo: ${esc(labelTipoVeh(lavado.tipo_vehiculo))}${lavado.placa?(' · '+esc(lavado.placa)):''}</div>
+    <div>Atendido por: ${esc(PERFIL.nombre_completo)}</div>
+    <div class="line"></div>
+    ${lineas.map(l=>`<div class="row"><span>${esc(l.descripcion)}</span><span>${fmtUsd(l.monto)}</span></div>`).join('')}
+    <div class="line"></div>
+    <div class="row tot"><span>TOTAL</span><span>${fmtUsd(total)}</span></div>
+    <div>Método de pago: ${esc(labelMetodoPago(lavado.metodo_pago))}</div>
+    <div class="line"></div>
+    <div class="foot">¡Gracias por su preferencia! 🚗💦${CONFIG_GENERAL.whatsapp_negocio?('<br>WhatsApp: '+esc(CONFIG_GENERAL.whatsapp_negocio)):''}<br>Vuelva pronto</div>
+  </body></html>`;
+  win.document.write(html); win.document.close();
+  win.onload = function(){ win.focus(); win.print(); };
+}
+
 async function modalNuevoLavado(prefill){
   prefill = prefill || {};
   const {data: servicios} = await sb.from('servicios').select('*').eq('activo', true).order('nombre');
@@ -863,11 +997,7 @@ async function modalNuevoLavado(prefill){
     <div class="form-row2">
       <div><label class="field-label">Precio (USD)</label><input type="number" step="0.01" id="nlPrecio" value="${prefill.precio||''}"></div>
       <div><label class="field-label">Método de pago</label>
-        <select id="nlMetodo">
-          <option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option>
-          <option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option>
-          <option value="zelle">Zelle</option><option value="credito">Crédito (a la cuenta del cliente)</option>
-        </select></div>
+        <select id="nlMetodo">${opcionesMetodoPago('efectivo_bs')}</select></div>
     </div>
     <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12.5px;font-weight:600;">
       <span class="switch"><input type="checkbox" id="nlLluvia"><span class="track"></span></span>
@@ -1149,7 +1279,7 @@ async function renderVenderProductos(){
     <label class="field-label">Teléfono del cliente (opcional)</label><input type="tel" id="vpTelefono" placeholder="0412-1234567">
     <label class="field-label">Nombre del cliente (opcional)</label><input type="text" id="vpNombre" data-cap="nombre">
     <label class="field-label">Método de pago</label>
-    <select id="vpMetodo"><option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="zelle">Zelle</option><option value="credito">Crédito (a la cuenta del cliente)</option></select>
+    <select id="vpMetodo">${opcionesMetodoPago('efectivo_bs')}</select>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
       <span style="font-size:13px;font-weight:700;">Total</span><span class="amt mono" id="carritoTotal" style="font-size:18px;">$0.00</span>
     </div>
@@ -1665,7 +1795,7 @@ function modalNuevoGasto(){
       <div><label class="field-label">Monto (USD)</label><input type="number" step="0.01" id="gsMonto"></div>
     </div>
     <div class="form-row2">
-      <div><label class="field-label">Método de pago</label><select id="gsMetodo"><option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option></select></div>
+      <div><label class="field-label">Método de pago</label><select id="gsMetodo"><option value="efectivo_bs">Efectivo (Bs)</option><option value="efectivo_divisa">Efectivo (Divisa)</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option></select></div>
       <div><label class="field-label">Fecha</label><input type="date" id="gsFecha" value="${hoy()}"></div>
     </div>
     <label class="field-label">Notas (opcional)</label><textarea id="gsNotas"></textarea>
@@ -1749,7 +1879,7 @@ function pedirAnularPagoCxp(pagoId, cuentaId){
 function modalRegistrarPagoCxp(cuentaId, saldo){
   abrirModal('Registrar pago', `
     <label class="field-label">Monto a pagar (USD)</label><input type="number" step="0.01" id="pgMonto" value="${saldo.toFixed(2)}">
-    <label class="field-label">Método de pago</label><select id="pgMetodo"><option value="efectivo">Efectivo</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option></select>
+    <label class="field-label">Método de pago</label><select id="pgMetodo"><option value="efectivo_bs">Efectivo (Bs)</option><option value="efectivo_divisa">Efectivo (Divisa)</option><option value="pago_movil">Pago móvil</option><option value="transferencia">Transferencia</option></select>
     <label class="field-label">Fecha</label><input type="date" id="pgFecha" value="${hoy()}">
     <button class="btn btn-primary btn-block" id="btnGuardarPagoCxp" style="margin-top:18px;">Registrar pago</button>
   `);
