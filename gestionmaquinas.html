@@ -404,9 +404,16 @@ async function obtenerTasaEuroBcv(){
   return TASA_EUR_BCV;
 }
 function esMetodoBolivares(m){ return m==='efectivo_bs' || m==='pago_movil' || m==='transferencia'; }
+// Devuelve solo el número en bolívares, sin símbolo monetario
 function fmtBcvEuro(montoUsd){
   if(!TASA_EUR_BCV) return null;
-  return '$' + (Number(montoUsd)*TASA_EUR_BCV).toFixed(2);
+  return (Number(montoUsd)*TASA_EUR_BCV).toFixed(2);
+}
+// Línea completa "Total Bs.: X (tasa BCV-Euro)" para mostrar bajo los totales
+function lineaTotalBs(montoUsd, metodo){
+  if(!esMetodoBolivares(metodo)) return '';
+  const bs = fmtBcvEuro(montoUsd);
+  return bs ? ('Total Bs.: ' + bs + '  (tasa BCV-Euro)') : '';
 }
 function fmtFecha(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('es-VE',{day:'2-digit',month:'short',year:'numeric'}); }
 function fmtFechaHora(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleString('es-VE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
@@ -727,24 +734,32 @@ async function cargarResumen(){
   var c = document.getElementById('content');
   c.innerHTML = `<div class="stat-grid" id="statGrid"></div>
     <div class="section-head"><h2>Actividad reciente</h2></div>
-    <div class="card-list" id="listaReciente"><div class="empty-state">Cargando…</div></div>`;
+    <div class="card-list" id="listaReciente"><div class="empty-state">Cargando…</div></div>
+    <div class="section-head" style="margin-top:22px;"><h2>Salida de productos y repuestos</h2></div>
+    <div class="card-list" id="listaSalidaProductos"><div class="empty-state">Cargando…</div></div>`;
   const inicioHoy = hoy()+'T00:00:00';
-  const [lavHoy, citasHoy, prodBajo, lavRecientes] = await Promise.all([
-    sb.from('lavados').select('precio_usd,estado,anulado').gte('fecha_lavado', inicioHoy).eq('anulado', false),
+  const [lavHoy, citasHoy, prodBajo, lavRecientes, ventasHoy, extrasHoy] = await Promise.all([
+    sb.from('lavados').select('id,precio_usd,estado,anulado').gte('fecha_lavado', inicioHoy).eq('anulado', false),
     sb.from('citas').select('id,estado').eq('fecha', hoy()),
     sb.from('productos').select('id,stock,stock_minimo').eq('activo', true),
-    sb.from('lavados').select('*').order('created_at',{ascending:false}).limit(6)
+    sb.from('lavados').select('*').order('created_at',{ascending:false}).limit(6),
+    sb.from('ventas_productos').select('total_usd,anulado').gte('created_at', inicioHoy).eq('anulado', false),
+    sb.from('lavado_extras').select('subtotal_usd,tipo').gte('created_at', inicioHoy)
   ]);
   const lavadosHoy = lavHoy.data||[];
-  const ingresosHoy = lavadosHoy.filter(l=>l.estado==='completado').reduce((a,b)=>a+Number(b.precio_usd||0),0);
+  const ingresosLavados = lavadosHoy.filter(l=>['completado','pagado'].includes(l.estado)).reduce((a,b)=>a+Number(b.precio_usd||0),0);
+  const ingresosVentas = (ventasHoy.data||[]).reduce((a,b)=>a+Number(b.total_usd||0),0);
+  const ingresosExtras = (extrasHoy.data||[]).reduce((a,b)=>a+Number(b.subtotal_usd||0),0);
   const citasHoyCount = (citasHoy.data||[]).length;
   const bajoStock = (prodBajo.data||[]).filter(p=> Number(p.stock) <= Number(p.stock_minimo)).length;
 
   var stats = [
     {ic:'droplet', val: lavadosHoy.length, lbl:'Lavados hoy'},
-    {ic:'banknote', val: fmtUsd(ingresosHoy), lbl:'Ingresos por lavados hoy'},
+    {ic:'banknote', val: fmtUsd(ingresosLavados), lbl:'Ingresos por lavados hoy'},
+    {ic:'shopping-cart', val: fmtUsd(ingresosVentas + ingresosExtras), lbl:'Ingresos por productos hoy'},
     {ic:'calendar', val: citasHoyCount, lbl:'Citas para hoy'},
     {ic:'package-search', val: bajoStock, lbl:'Productos con stock bajo'},
+    {ic:'wallet', val: fmtUsd(ingresosLavados + ingresosVentas + ingresosExtras), lbl:'Total facturado hoy'},
   ];
   if(esJefeOAdmin()){
     const [cxp, creditos] = await Promise.all([
@@ -774,7 +789,40 @@ async function cargarResumen(){
       </div>
     `).join('');
   }
+  await pintarSalidaProductos();
   drawIcons(c);
+}
+
+// Lista unificada: productos vendidos en mostrador + los facturados dentro de un lavado
+async function pintarSalidaProductos(){
+  const cont = document.getElementById('listaSalidaProductos');
+  if(!cont) return;
+  const [ventas, extras] = await Promise.all([
+    sb.from('ventas_productos').select('id,nombre_cliente,total_usd,metodo_pago,created_at,anulado,venta_items(cantidad,productos(nombre))').eq('anulado',false).order('created_at',{ascending:false}).limit(10),
+    sb.from('lavado_extras').select('id,descripcion,cantidad,subtotal_usd,tipo,created_at,lavados(nombre_cliente)').eq('tipo','producto').order('created_at',{ascending:false}).limit(10)
+  ]);
+  const filas = [];
+  (ventas.data||[]).forEach(v=>{
+    const detalle = (v.venta_items||[]).map(i=>`${i.productos?.nombre||'Producto'} × ${Number(i.cantidad)}`).join(', ');
+    filas.push({fecha:v.created_at, titulo:v.nombre_cliente||'Venta de mostrador', etiqueta:'Mostrador',
+      detalle: detalle || 'Venta de productos', metodo:labelMetodoPago(v.metodo_pago), monto:v.total_usd});
+  });
+  (extras.data||[]).forEach(e=>{
+    filas.push({fecha:e.created_at, titulo:e.lavados?.nombre_cliente||'Cliente', etiqueta:'En lavado',
+      detalle:`${e.descripcion} × ${Number(e.cantidad)}`, metodo:null, monto:e.subtotal_usd});
+  });
+  filas.sort((a,b)=> new Date(b.fecha) - new Date(a.fecha));
+  const top = filas.slice(0,12);
+  if(top.length===0){ cont.innerHTML = emptyState('box','Todavía no hay salida de productos ni repuestos'); drawIcons(cont); return; }
+  cont.innerHTML = top.map(f=>`
+    <div class="item-row glass st-completada">
+      <span class="info">
+        <span class="t1">${esc(f.titulo)} <span class="chip">${esc(f.etiqueta)}</span></span>
+        <span class="t2">${esc(f.detalle)}${f.metodo?(' · '+esc(f.metodo)):''} · ${fmtFechaHora(f.fecha)}</span>
+      </span>
+      <span class="amt mono">${fmtUsd(f.monto)}</span>
+    </div>`).join('');
+  drawIcons(cont);
 }
 
 /* =====================================================================
@@ -939,20 +987,20 @@ async function abrirTicketLavado(lavado){
       <button class="btn btn-glass" id="btnCobroAbono" type="button"><i data-ic="credit-card"></i>Cobro / Abono</button>
       <button class="btn btn-glass" id="btnImprimirRecibo" type="button"><i data-ic="receipt"></i>Imprimir</button>
     </div>
+    <button class="btn btn-glass btn-block" id="btnActualizarTicket" type="button" style="margin-top:10px;"><i data-ic="refresh-cw"></i>Actualizar y cerrar</button>
   `, '480px');
   drawIcons(document.getElementById('modalRoot'));
   function pintarTotalBsTicket(){
     const cont = document.getElementById('tkTotalBs');
     const metodo = document.getElementById('tkMetodo').value;
-    const bs = esMetodoBolivares(metodo) ? fmtBcvEuro(total) : null;
-    cont.textContent = bs ? ('Equivalente a cobrar: ' + bs + ' (tasa BCV-Euro)') : '';
+    cont.textContent = lineaTotalBs(total, metodo);
   }
   pintarTotalBsTicket();
 
   document.querySelectorAll('.quitar-extra').forEach(btn=> btn.addEventListener('click', async function(){
     const {error} = await sb.from('lavado_extras').delete().eq('id', this.dataset.id);
     if(error){ toast('No se pudo quitar: '+mensajeError(error), true); return; }
-    toast('Ítem quitado del ticket'); abrirTicketLavado(lavado);
+    toast('Ítem quitado del ticket'); refrescarListadoDeFondo(); abrirTicketLavado(lavado);
   }));
   const btnProd = document.getElementById('btnAgregarExtraProducto');
   if(btnProd) btnProd.addEventListener('click', async function(){
@@ -962,7 +1010,7 @@ async function abrirTicketLavado(lavado){
     const precio = Number(opt.dataset.precio);
     const {error} = await sb.from('lavado_extras').insert({lavado_id:lavado.id, tipo:'producto', producto_id:opt.value, descripcion:opt.dataset.nombre, cantidad, precio_unitario_usd:precio, subtotal_usd:precio*cantidad, creado_por:PERFIL.id});
     if(error){ toast('No se pudo agregar: '+mensajeError(error), true); return; }
-    toast('Producto agregado al ticket'); abrirTicketLavado(lavado);
+    toast('Producto agregado al ticket'); refrescarListadoDeFondo(); abrirTicketLavado(lavado);
   });
   const btnServ = document.getElementById('btnAgregarExtraServicio');
   if(btnServ) btnServ.addEventListener('click', async function(){
@@ -971,23 +1019,32 @@ async function abrirTicketLavado(lavado){
     const precio = Number(opt.dataset.precio);
     const {error} = await sb.from('lavado_extras').insert({lavado_id:lavado.id, tipo:'servicio', servicio_id:opt.value, descripcion:opt.dataset.nombre, cantidad:1, precio_unitario_usd:precio, subtotal_usd:precio, creado_por:PERFIL.id});
     if(error){ toast('No se pudo agregar: '+mensajeError(error), true); return; }
-    toast('Servicio agregado al ticket'); abrirTicketLavado(lavado);
+    toast('Servicio agregado al ticket'); refrescarListadoDeFondo(); abrirTicketLavado(lavado);
   });
   document.getElementById('tkMetodo').addEventListener('change', async function(){
     const {error} = await sb.from('lavados').update({metodo_pago:this.value}).eq('id', lavado.id);
     if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
-    lavado.metodo_pago = this.value; toast('Método de pago actualizado'); pintarTotalBsTicket();
+    lavado.metodo_pago = this.value; toast('Método de pago actualizado'); pintarTotalBsTicket(); refrescarListadoDeFondo();
   });
   const btnPagado = document.getElementById('btnMarcarPagadoTicket');
   if(btnPagado) btnPagado.addEventListener('click', async function(){
     const {error} = await sb.from('lavados').update({estado:'pagado'}).eq('id', lavado.id);
     if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
-    lavado.estado = 'pagado'; toast('Factura cerrada como pagada'); abrirTicketLavado(lavado); buscarLavados();
+    lavado.estado = 'pagado'; toast('Factura cerrada como pagada'); refrescarListadoDeFondo(); abrirTicketLavado(lavado);
+  });
+  document.getElementById('btnActualizarTicket').addEventListener('click', function(){
+    cerrarModal(); refrescarListadoDeFondo(); toast('Listado actualizado');
   });
   document.getElementById('btnCobroAbono').addEventListener('click', function(){
     modalMovimientoCliente({id: lavado.cliente_id, nombre: lavado.nombre_cliente, telefono: lavado.telefono});
   });
   document.getElementById('btnImprimirRecibo').addEventListener('click', ()=> imprimirReciboLavado(lavado));
+}
+
+// Refresca la vista que está detrás del modal para ver los montos al instante
+function refrescarListadoDeFondo(){
+  if(VISTA_ACTUAL === 'lavados') buscarLavados();
+  else if(VISTA_ACTUAL === 'resumen') cargarResumen();
 }
 
 async function imprimirReciboLavado(lavado){
@@ -1019,7 +1076,6 @@ async function imprimirReciboLavado(lavado){
     ${lineas.map(l=>`<div class="row"><span>${esc(l.descripcion)}</span><span>${fmtUsd(l.monto)}</span></div>`).join('')}
     <div class="line"></div>
     <div class="row tot"><span>TOTAL</span><span>${fmtUsd(total)}</span></div>
-    ${esMetodoBolivares(lavado.metodo_pago) && fmtBcvEuro(total) ? `<div class="row"><span>Equivalente (BCV-Euro)</span><span>${fmtBcvEuro(total)}</span></div>` : ''}
     <div>Método de pago: ${esc(labelMetodoPago(lavado.metodo_pago))}</div>
     <div class="line"></div>
     <div class="foot">¡Gracias por su preferencia! 🚗💦${CONFIG_GENERAL.whatsapp_negocio?('<br>WhatsApp: '+esc(CONFIG_GENERAL.whatsapp_negocio)):''}<br>Vuelva pronto</div>
@@ -1065,8 +1121,7 @@ async function modalNuevoLavado(prefill){
     const cont = document.getElementById('nlTotalBs');
     const metodo = document.getElementById('nlMetodo').value;
     const precio = Number(document.getElementById('nlPrecio').value)||0;
-    const bs = esMetodoBolivares(metodo) ? fmtBcvEuro(precio) : null;
-    cont.textContent = bs ? ('Equivalente a cobrar: ' + bs + ' (tasa BCV-Euro)') : '';
+    cont.textContent = lineaTotalBs(precio, metodo);
   }
   document.getElementById('nlMetodo').addEventListener('change', pintarTotalBsNuevoLavado);
   document.getElementById('nlPrecio').addEventListener('input', pintarTotalBsNuevoLavado);
@@ -1401,8 +1456,7 @@ function pintarCarrito(){
   const metodoSel = document.getElementById('vpMetodo');
   const bsCont = document.getElementById('vpTotalBs');
   if(metodoSel && bsCont){
-    const bs = esMetodoBolivares(metodoSel.value) ? fmtBcvEuro(total) : null;
-    bsCont.textContent = bs ? ('Equivalente a cobrar: ' + bs + ' (tasa BCV-Euro)') : '';
+    bsCont.textContent = lineaTotalBs(total, metodoSel.value);
   }
 }
 function cambiarCantCarrito(i, delta){
