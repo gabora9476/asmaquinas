@@ -391,6 +391,23 @@ function capitalizar(s){ return String(s||'').trim().split(/\s+/).map(w=>w? w[0]
 function fmtUsd(n){ return '$' + (Number(n)||0).toFixed(2); }
 function hoy(){ return new Date().toISOString().slice(0,10); }
 function ahoraISO(){ return new Date().toISOString(); }
+
+/* ---------- tasa BCV-Euro (para pagos en bolívares) ---------- */
+let TASA_EUR_BCV = null;
+async function obtenerTasaEuroBcv(){
+  try{
+    const res = await fetch('https://ve.dolarapi.com/v1/euros/oficial');
+    if(!res.ok) throw new Error('bcv');
+    const data = await res.json();
+    TASA_EUR_BCV = Number(data.promedio) || null;
+  }catch(e){ console.error('No se pudo obtener la tasa BCV-Euro', e); }
+  return TASA_EUR_BCV;
+}
+function esMetodoBolivares(m){ return m==='efectivo_bs' || m==='pago_movil' || m==='transferencia'; }
+function fmtBcvEuro(montoUsd){
+  if(!TASA_EUR_BCV) return null;
+  return '$' + (Number(montoUsd)*TASA_EUR_BCV).toFixed(2);
+}
 function fmtFecha(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('es-VE',{day:'2-digit',month:'short',year:'numeric'}); }
 function fmtFechaHora(d){ if(!d) return '—'; var dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleString('es-VE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
 function labelTipoVeh(t){ return {moto:'Moto',carro:'Carro',camioneta:'Camioneta',otro:'Otro'}[t]||t||''; }
@@ -589,6 +606,7 @@ async function cargarSesion(session){
   SESION = session; PERFIL = perfil;
   const {data: cfg} = await sb.from('config_general').select('*').eq('id',1).single();
   CONFIG_GENERAL = cfg || {};
+  obtenerTasaEuroBcv();
   document.getElementById('viewLogin').classList.add('hidden');
   document.getElementById('viewApp').classList.add('show');
   pintarSidebarUsuario();
@@ -790,14 +808,27 @@ async function buscarLavados(){
   const {data, error} = await q;
   if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
   if(!data || data.length===0){ cont.innerHTML = emptyState('droplet','No hay lavados con estos filtros'); return; }
-  cont.innerHTML = data.map(l=>`
+  let extrasMap = {};
+  if(data.length){
+    const {data: extrasData} = await sb.from('lavado_extras').select('lavado_id, subtotal_usd').in('lavado_id', data.map(l=>l.id));
+    (extrasData||[]).forEach(e=>{
+      const m = extrasMap[e.lavado_id] || {total:0, count:0};
+      m.total += Number(e.subtotal_usd); m.count += 1;
+      extrasMap[e.lavado_id] = m;
+    });
+  }
+  cont.innerHTML = data.map(l=>{
+    const extra = extrasMap[l.id];
+    const totalTicket = Number(l.precio_usd) + (extra?extra.total:0);
+    return `
     <div class="item-row glass st-${esc(l.estado)}">
       <span class="info">
         <span class="t1">${esc(l.nombre_cliente)} ${badge(l.estado)}</span>
         <span class="t2">${esc(labelTipoVeh(l.tipo_vehiculo))}${l.placa?(' · '+esc(l.placa)):''} · ${esc(labelMetodoPago(l.metodo_pago))} · ${fmtFechaHora(l.fecha_lavado)}${l.telefono?(' · '+esc(l.telefono)):''}</span>
+        ${extra?`<span class="t2">+ ${extra.count} producto(s)/servicio(s) del ticket (${fmtUsd(extra.total)})</span>`:''}
         ${l.anulado?`<span class="t2" style="color:var(--red);">Anulado: ${esc(l.anulado_motivo||'')}</span>`:''}
       </span>
-      <span class="amt mono">${fmtUsd(l.precio_usd)}</span>
+      <span class="amt mono">${fmtUsd(totalTicket)}</span>
       <span class="acts">
         ${l.estado==='en_proceso'?`<button class="btn btn-primary btn-sm" onclick='completarLavado(${JSON.stringify(l)})'>Completar</button>`:''}
         ${(!l.anulado && l.estado!=='pagado')?`<button class="btn btn-primary btn-sm" onclick='pedirMarcarPagado(${JSON.stringify(l)})'>Pagado</button>`:''}
@@ -805,7 +836,7 @@ async function buscarLavados(){
         ${(!l.anulado && esJefeOAdmin())?`<button class="btn btn-danger btn-sm" onclick="pedirAnularLavado('${l.id}')">Anular</button>`:''}
       </span>
     </div>
-  `).join('');
+  `;}).join('');
   drawIcons(cont);
 }
 async function completarLavado(lavado){
@@ -900,6 +931,7 @@ async function abrirTicketLavado(lavado){
       <span style="font-weight:700;font-size:13.5px;">Total a cobrar</span>
       <span class="amt mono" style="font-size:19px;">${fmtUsd(total)}</span>
     </div>
+    <div id="tkTotalBs" class="help-text" style="text-align:right;margin-top:-4px;"></div>
     <label class="field-label">Método de pago</label>
     <select id="tkMetodo">${opcionesMetodoPago(lavado.metodo_pago)}</select>
     ${facturaAbierta?`<button class="btn btn-primary btn-block" id="btnMarcarPagadoTicket" type="button" style="margin-top:16px;"><i data-ic="check"></i>Marcar como pagado (cerrar factura)</button>`:`<div class="chip" style="margin-top:16px;">🔒 Factura cerrada — pagada</div>`}
@@ -909,6 +941,13 @@ async function abrirTicketLavado(lavado){
     </div>
   `, '480px');
   drawIcons(document.getElementById('modalRoot'));
+  function pintarTotalBsTicket(){
+    const cont = document.getElementById('tkTotalBs');
+    const metodo = document.getElementById('tkMetodo').value;
+    const bs = esMetodoBolivares(metodo) ? fmtBcvEuro(total) : null;
+    cont.textContent = bs ? ('Equivalente a cobrar: ' + bs + ' (tasa BCV-Euro)') : '';
+  }
+  pintarTotalBsTicket();
 
   document.querySelectorAll('.quitar-extra').forEach(btn=> btn.addEventListener('click', async function(){
     const {error} = await sb.from('lavado_extras').delete().eq('id', this.dataset.id);
@@ -937,7 +976,7 @@ async function abrirTicketLavado(lavado){
   document.getElementById('tkMetodo').addEventListener('change', async function(){
     const {error} = await sb.from('lavados').update({metodo_pago:this.value}).eq('id', lavado.id);
     if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
-    lavado.metodo_pago = this.value; toast('Método de pago actualizado');
+    lavado.metodo_pago = this.value; toast('Método de pago actualizado'); pintarTotalBsTicket();
   });
   const btnPagado = document.getElementById('btnMarcarPagadoTicket');
   if(btnPagado) btnPagado.addEventListener('click', async function(){
@@ -980,6 +1019,7 @@ async function imprimirReciboLavado(lavado){
     ${lineas.map(l=>`<div class="row"><span>${esc(l.descripcion)}</span><span>${fmtUsd(l.monto)}</span></div>`).join('')}
     <div class="line"></div>
     <div class="row tot"><span>TOTAL</span><span>${fmtUsd(total)}</span></div>
+    ${esMetodoBolivares(lavado.metodo_pago) && fmtBcvEuro(total) ? `<div class="row"><span>Equivalente (BCV-Euro)</span><span>${fmtBcvEuro(total)}</span></div>` : ''}
     <div>Método de pago: ${esc(labelMetodoPago(lavado.metodo_pago))}</div>
     <div class="line"></div>
     <div class="foot">¡Gracias por su preferencia! 🚗💦${CONFIG_GENERAL.whatsapp_negocio?('<br>WhatsApp: '+esc(CONFIG_GENERAL.whatsapp_negocio)):''}<br>Vuelva pronto</div>
@@ -1014,16 +1054,28 @@ async function modalNuevoLavado(prefill){
       <div><label class="field-label">Método de pago</label>
         <select id="nlMetodo">${opcionesMetodoPago('efectivo_bs')}</select></div>
     </div>
+    <div id="nlTotalBs" class="help-text" style="text-align:right;margin-top:-8px;"></div>
     <label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12.5px;font-weight:600;">
       <span class="switch"><input type="checkbox" id="nlLluvia"><span class="track"></span></span>
       Incluir seguro de lluvia (+${fmtUsd(CONFIG_GENERAL.precio_seguro_lluvia_usd||1.5)}, válido ${CONFIG_GENERAL.horas_seguro_lluvia||48}h)
     </label>
     <button class="btn btn-primary btn-block" id="btnGuardarLavado" style="margin-top:18px;">${prefill.citaId?'Registrar y completar cita':'Registrar lavado'}</button>
   `, '480px');
+  function pintarTotalBsNuevoLavado(){
+    const cont = document.getElementById('nlTotalBs');
+    const metodo = document.getElementById('nlMetodo').value;
+    const precio = Number(document.getElementById('nlPrecio').value)||0;
+    const bs = esMetodoBolivares(metodo) ? fmtBcvEuro(precio) : null;
+    cont.textContent = bs ? ('Equivalente a cobrar: ' + bs + ' (tasa BCV-Euro)') : '';
+  }
+  document.getElementById('nlMetodo').addEventListener('change', pintarTotalBsNuevoLavado);
+  document.getElementById('nlPrecio').addEventListener('input', pintarTotalBsNuevoLavado);
   document.getElementById('nlServicio').addEventListener('change', function(){
     var opt = this.selectedOptions[0];
     if(opt && opt.dataset.precio){ document.getElementById('nlPrecio').value = opt.dataset.precio; document.getElementById('nlTipo').value = opt.dataset.tipo; }
+    pintarTotalBsNuevoLavado();
   });
+  pintarTotalBsNuevoLavado();
   if(prefill.servicioId){ document.getElementById('nlServicio').value = prefill.servicioId; document.getElementById('nlServicio').dispatchEvent(new Event('change')); }
   document.getElementById('btnGuardarLavado').addEventListener('click', async function(){
     const btn=this;
@@ -1175,14 +1227,14 @@ function cargarProductosTab(){
 function pintarTabsProductos(){
   const jefe = esJefeOAdmin();
   const tabs = [
-    {id:'catalogo', label:'Catálogo'}, {id:'vender', label:'Vender'},
+    {id:'catalogo', label:'Catálogo'}, {id:'vender', label:'Vender'}, {id:'ventas', label:'Ventas'},
   ];
   if(jefe) tabs.push({id:'servicios', label:'Servicios'}, {id:'compras', label:'Compras'}, {id:'kardex', label:'Kardex'});
   var c = document.getElementById('content');
   c.innerHTML = `<div class="tabs-row" id="prodTabs"></div><div id="prodBody"></div>`;
   document.getElementById('prodTabs').innerHTML = tabs.map(t=>`<button class="tab-btn ${t.id===PROD_TAB?'active':''}" data-t="${t.id}">${esc(t.label)}</button>`).join('');
   document.getElementById('prodTabs').querySelectorAll('[data-t]').forEach(b=> b.addEventListener('click', ()=>{ PROD_TAB=b.dataset.t; CARRITO=[]; pintarTabsProductos(); }));
-  const render = {catalogo:renderCatalogoProductos, vender:renderVenderProductos, servicios:renderServiciosCatalogo, compras:renderCompras, kardex:renderKardex}[PROD_TAB];
+  const render = {catalogo:renderCatalogoProductos, vender:renderVenderProductos, ventas:renderVentasHistorial, servicios:renderServiciosCatalogo, compras:renderCompras, kardex:renderKardex}[PROD_TAB];
   if(render) render();
 }
 const CAT_LABEL = {consumible:'Consumible', repuesto:'Repuesto', accesorio:'Accesorio'};
@@ -1312,9 +1364,11 @@ async function renderVenderProductos(){
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
       <span style="font-size:13px;font-weight:700;">Total</span><span class="amt mono" id="carritoTotal" style="font-size:18px;">$0.00</span>
     </div>
+    <div id="vpTotalBs" class="help-text" style="text-align:right;margin-top:-4px;"></div>
     <button class="btn btn-primary btn-block" id="btnRegistrarVenta" style="margin-top:14px;">Registrar venta</button>
   `;
   drawIcons(body);
+  document.getElementById('vpMetodo').addEventListener('change', pintarCarrito);
   document.getElementById('btnAgregarCarrito').addEventListener('click', function(){
     const sel = document.getElementById('vpProducto');
     const opt = sel.selectedOptions[0];
@@ -1344,6 +1398,12 @@ function pintarCarrito(){
   drawIcons(cont);
   const total = CARRITO.reduce((a,b)=>a+b.precio*b.cantidad,0);
   document.getElementById('carritoTotal').textContent = fmtUsd(total);
+  const metodoSel = document.getElementById('vpMetodo');
+  const bsCont = document.getElementById('vpTotalBs');
+  if(metodoSel && bsCont){
+    const bs = esMetodoBolivares(metodoSel.value) ? fmtBcvEuro(total) : null;
+    bsCont.textContent = bs ? ('Equivalente a cobrar: ' + bs + ' (tasa BCV-Euro)') : '';
+  }
 }
 function cambiarCantCarrito(i, delta){
   const it = CARRITO[i]; if(!it) return;
@@ -1380,6 +1440,31 @@ async function registrarVenta(){
   toast('Venta registrada'); CARRITO=[]; renderVenderProductos();
 }
 
+async function renderVentasHistorial(){
+  var body = document.getElementById('prodBody');
+  body.innerHTML = `<div class="section-head"><h2>Historial de ventas de productos</h2></div><div class="card-list" id="listaVentas"></div>`;
+  const {data, error} = await sb.from('ventas_productos').select('*, venta_items(cantidad)').order('created_at',{ascending:false}).limit(100);
+  const cont = document.getElementById('listaVentas');
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('shopping-cart','Aún no hay ventas de productos registradas'); return; }
+  cont.innerHTML = data.map(v=>{
+    const nItems = (v.venta_items||[]).reduce((a,b)=>a+Number(b.cantidad),0);
+    return `<div class="item-row glass ${v.anulado?'st-anulado':'st-completada'}">
+      <span class="info"><span class="t1">${esc(v.nombre_cliente||'Venta de mostrador')} ${v.anulado?badge('anulado'):''}</span>
+      <span class="t2">${nItems} artículo(s) · ${esc(labelMetodoPago(v.metodo_pago))} · ${fmtFechaHora(v.created_at)}</span></span>
+      <span class="amt mono">${fmtUsd(v.total_usd)}</span>
+      <span class="acts">${(!v.anulado && esJefeOAdmin())?`<button class="btn btn-danger btn-sm" onclick="pedirAnularVenta('${v.id}')">Anular</button>`:''}</span>
+    </div>`;
+  }).join('');
+  drawIcons(cont);
+}
+function pedirAnularVenta(id){
+  confirmarAccion('Anular venta', 'Esta acción anulará la venta y repondrá el stock de los productos vendidos. Escribe el motivo.', 'Anular venta', async (motivo)=>{
+    const {error} = await sb.rpc('anular_venta', {p_id:id, p_motivo:motivo});
+    if(error){ toast('No se pudo anular: '+mensajeError(error), true); return; }
+    toast('Venta anulada'); cerrarModal(); renderVentasHistorial();
+  }, true);
+}
 async function renderServiciosCatalogo(){
   var body = document.getElementById('prodBody');
   body.innerHTML = `<div class="section-head"><h2>Catálogo de servicios de lavado</h2><button class="btn btn-primary btn-sm" id="btnNuevoServicio"><i data-ic="plus"></i>Nuevo servicio</button></div><div class="card-list" id="listaServicios"></div>`;
