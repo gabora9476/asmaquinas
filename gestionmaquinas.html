@@ -168,7 +168,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--g1); box-shadow:0 0 0
 .item-row{border-radius:17px; padding:13px 15px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-left:3px solid var(--ink-faint);}
 .item-row.st-pendiente,.item-row.st-vencida{border-left-color:var(--amber);}
 .item-row.st-confirmada,.item-row.st-en_proceso,.item-row.st-parcial{border-left-color:var(--blue);}
-.item-row.st-completada,.item-row.st-completado,.item-row.st-pagada{border-left-color:var(--g1);}
+.item-row.st-completada,.item-row.st-completado,.item-row.st-pagada,.item-row.st-pagado{border-left-color:var(--g1);}
 .item-row.st-cancelada,.item-row.st-anulado,.item-row.st-anulada{border-left-color:var(--red); opacity:.72;}
 .item-row .info{flex:1; min-width:160px;}
 .item-row .info .t1{font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
@@ -185,7 +185,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--g1); box-shadow:0 0 0
 .badge{display:inline-block; padding:3px 9px; border-radius:99px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.3px;}
 .b-pendiente,.b-vencida{background:rgba(232,176,75,.16); color:var(--amber);}
 .b-confirmada,.b-en_proceso,.b-parcial{background:rgba(79,160,232,.16); color:var(--blue);}
-.b-completada,.b-completado,.b-pagada{background:var(--g-soft); color:var(--g1);}
+.b-completada,.b-completado,.b-pagada,.b-pagado{background:var(--g-soft); color:var(--g1);}
 .b-cancelada,.b-anulado,.b-anulada{background:rgba(242,104,92,.14); color:#FF9C8F;}
 .b-rol-admin{background:rgba(232,176,75,.16); color:var(--amber);}
 .b-rol-jefe{background:rgba(79,160,232,.16); color:var(--blue);}
@@ -800,6 +800,7 @@ async function buscarLavados(){
       <span class="amt mono">${fmtUsd(l.precio_usd)}</span>
       <span class="acts">
         ${l.estado==='en_proceso'?`<button class="btn btn-primary btn-sm" onclick='completarLavado(${JSON.stringify(l)})'>Completar</button>`:''}
+        ${(!l.anulado && l.estado!=='pagado')?`<button class="btn btn-primary btn-sm" onclick='pedirMarcarPagado(${JSON.stringify(l)})'>Pagado</button>`:''}
         ${!l.anulado?`<button class="btn btn-glass btn-sm" onclick='abrirTicketLavado(${JSON.stringify(l)})'><i data-ic="receipt"></i>Ticket</button>`:''}
         ${(!l.anulado && esJefeOAdmin())?`<button class="btn btn-danger btn-sm" onclick="pedirAnularLavado('${l.id}')">Anular</button>`:''}
       </span>
@@ -844,6 +845,13 @@ function pedirAnularLavado(id){
     toast('Lavado anulado'); cerrarModal(); buscarLavados();
   }, true);
 }
+function pedirMarcarPagado(lavado){
+  confirmarAccion('Marcar como pagado', 'Esto cerrará la factura de este lavado: ya no se podrán agregar más productos o servicios. ¿Confirmas que el cliente ya pagó?', 'Sí, marcar pagado', async ()=>{
+    const {error} = await sb.from('lavados').update({estado:'pagado'}).eq('id', lavado.id);
+    if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
+    toast('Factura cerrada como pagada'); cerrarModal(); buscarLavados();
+  });
+}
 
 /* =====================================================================
    TICKET DEL LAVADO — agregar productos/servicios extra, cobro/abono,
@@ -857,12 +865,12 @@ async function abrirTicketLavado(lavado){
   ]);
   const listaExtras = extras || [];
   const total = Number(lavado.precio_usd) + listaExtras.reduce((a,b)=>a+Number(b.subtotal_usd),0);
-  const enProceso = lavado.estado === 'en_proceso';
+  const facturaAbierta = lavado.estado !== 'pagado' && !lavado.anulado;
   const opcionesProd = (productos||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_usd}" data-nombre="${esc(p.nombre)}">${esc(p.nombre)} — ${fmtUsd(p.precio_usd)}</option>`).join('');
   const opcionesServ = (servicios||[]).map(s=>`<option value="${s.id}" data-precio="${s.precio_usd}" data-nombre="${esc(s.nombre)}">${esc(s.nombre)} — ${fmtUsd(s.precio_usd)}</option>`).join('');
 
   abrirModal('Ticket del lavado', `
-    <div class="chip" style="margin-bottom:12px;">${esc(lavado.nombre_cliente)} · ${esc(labelTipoVeh(lavado.tipo_vehiculo))}${lavado.placa?(' · '+esc(lavado.placa)):''}</div>
+    <div class="chip" style="margin-bottom:12px;">${esc(lavado.nombre_cliente)} · ${esc(labelTipoVeh(lavado.tipo_vehiculo))}${lavado.placa?(' · '+esc(lavado.placa)):''} ${badge(lavado.estado)}</div>
     <div class="item-row glass" style="margin-bottom:8px;">
       <span class="info"><span class="t1">Lavado</span><span class="t2">Servicio base</span></span>
       <span class="amt mono">${fmtUsd(lavado.precio_usd)}</span>
@@ -872,10 +880,10 @@ async function abrirTicketLavado(lavado){
         <div class="item-row glass" style="margin-bottom:8px;">
           <span class="info"><span class="t1">${esc(e.descripcion)}</span><span class="t2">${e.cantidad>1?(e.cantidad+' × '+fmtUsd(e.precio_unitario_usd)):(e.tipo==='producto'?'Producto':'Servicio adicional')}</span></span>
           <span class="amt mono">${fmtUsd(e.subtotal_usd)}</span>
-          ${enProceso?`<button class="btn btn-ghost btn-icon quitar-extra" data-id="${e.id}" type="button"><i data-ic="trash-2"></i></button>`:''}
+          ${facturaAbierta?`<button class="btn btn-ghost btn-icon quitar-extra" data-id="${e.id}" type="button"><i data-ic="trash-2"></i></button>`:''}
         </div>`).join('')}
     </div>
-    ${enProceso?`
+    ${facturaAbierta?`
     <div class="divider"></div>
     <label class="field-label" style="margin-top:0;">Agregar producto (repuesto, consumible o accesorio)</label>
     <select id="tkProducto"><option value="">Selecciona un producto…</option>${opcionesProd}</select>
@@ -894,9 +902,10 @@ async function abrirTicketLavado(lavado){
     </div>
     <label class="field-label">Método de pago</label>
     <select id="tkMetodo">${opcionesMetodoPago(lavado.metodo_pago)}</select>
-    <div class="form-row2" style="margin-top:16px;">
+    ${facturaAbierta?`<button class="btn btn-primary btn-block" id="btnMarcarPagadoTicket" type="button" style="margin-top:16px;"><i data-ic="check"></i>Marcar como pagado (cerrar factura)</button>`:`<div class="chip" style="margin-top:16px;">🔒 Factura cerrada — pagada</div>`}
+    <div class="form-row2" style="margin-top:10px;">
       <button class="btn btn-glass" id="btnCobroAbono" type="button"><i data-ic="credit-card"></i>Cobro / Abono</button>
-      <button class="btn btn-primary" id="btnImprimirRecibo" type="button"><i data-ic="receipt"></i>Imprimir</button>
+      <button class="btn btn-glass" id="btnImprimirRecibo" type="button"><i data-ic="receipt"></i>Imprimir</button>
     </div>
   `, '480px');
   drawIcons(document.getElementById('modalRoot'));
@@ -929,6 +938,12 @@ async function abrirTicketLavado(lavado){
     const {error} = await sb.from('lavados').update({metodo_pago:this.value}).eq('id', lavado.id);
     if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
     lavado.metodo_pago = this.value; toast('Método de pago actualizado');
+  });
+  const btnPagado = document.getElementById('btnMarcarPagadoTicket');
+  if(btnPagado) btnPagado.addEventListener('click', async function(){
+    const {error} = await sb.from('lavados').update({estado:'pagado'}).eq('id', lavado.id);
+    if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
+    lavado.estado = 'pagado'; toast('Factura cerrada como pagada'); abrirTicketLavado(lavado); buscarLavados();
   });
   document.getElementById('btnCobroAbono').addEventListener('click', function(){
     modalMovimientoCliente({id: lavado.cliente_id, nombre: lavado.nombre_cliente, telefono: lavado.telefono});
@@ -1209,12 +1224,26 @@ async function buscarProductosCatalogo(){
         <span class="t2">Stock: ${esc(p.stock)} ${esc(p.unidad)} ${bajo?'· <span style="color:var(--amber);font-weight:700;">bajo mínimo</span>':''}${p.sku?(' · SKU '+esc(p.sku)):''}${jefe?(' · Costo '+fmtUsd(p.costo_usd)):''}</span>
       </span>
       <span class="amt mono">${fmtUsd(p.precio_usd)}</span>
-      ${jefe?`<span class="acts"><button class="btn btn-glass btn-sm" onclick='abrirModalProductoJSON(${JSON.stringify(p)})'><i data-ic="pencil"></i></button></span>`:''}
+      ${jefe?`<span class="acts">
+        <button class="btn btn-glass btn-sm" onclick='abrirModalProductoJSON(${JSON.stringify(p)})'><i data-ic="pencil"></i></button>
+        <button class="btn btn-danger btn-sm" onclick='pedirEliminarProducto(${JSON.stringify({id:p.id, nombre:p.nombre})})'><i data-ic="trash-2"></i></button>
+      </span>`:''}
     </div>`;
   }).join('');
   drawIcons(cont);
 }
 function abrirModalProductoJSON(p){ modalProducto(p); }
+function pedirEliminarProducto(p){
+  confirmarAccion('Eliminar producto', `¿Eliminar "${p.nombre}" del catálogo? Esta acción no se puede deshacer.`, 'Eliminar', async ()=>{
+    const {error} = await sb.from('productos').delete().eq('id', p.id);
+    if(error){
+      if(error.code==='23503'){ toast('No se puede eliminar: tiene historial de ventas o compras. Desactívalo en su lugar.', true); }
+      else{ toast('No se pudo eliminar: '+mensajeError(error), true); }
+      return;
+    }
+    toast('Producto eliminado'); cerrarModal(); buscarProductosCatalogo();
+  });
+}
 function modalProducto(p){
   p = p || {};
   abrirModal(p.id?'Editar producto':'Nuevo producto', `
@@ -1365,11 +1394,25 @@ async function renderServiciosCatalogo(){
       <span class="info"><span class="t1">${esc(s.nombre)} ${!s.activo?'<span class="badge b-cancelada">Inactivo</span>':''}</span>
       <span class="t2">${labelTipoVeh(s.tipo_vehiculo)}${s.duracion_min?(' · ~'+s.duracion_min+' min'):''}</span></span>
       <span class="amt mono">${fmtUsd(s.precio_usd)}</span>
-      <span class="acts"><button class="btn btn-glass btn-sm" onclick='abrirModalServicioJSON(${JSON.stringify(s)})'><i data-ic="pencil"></i></button></span>
+      <span class="acts">
+        <button class="btn btn-glass btn-sm" onclick='abrirModalServicioJSON(${JSON.stringify(s)})'><i data-ic="pencil"></i></button>
+        <button class="btn btn-danger btn-sm" onclick='pedirEliminarServicio(${JSON.stringify({id:s.id, nombre:s.nombre})})'><i data-ic="trash-2"></i></button>
+      </span>
     </div>`).join('');
   drawIcons(cont);
 }
 function abrirModalServicioJSON(s){ modalServicio(s); }
+function pedirEliminarServicio(s){
+  confirmarAccion('Eliminar servicio', `¿Eliminar "${s.nombre}" del catálogo? Esta acción no se puede deshacer.`, 'Eliminar', async ()=>{
+    const {error} = await sb.from('servicios').delete().eq('id', s.id);
+    if(error){
+      if(error.code==='23503'){ toast('No se puede eliminar: tiene historial de uso. Desactívalo en su lugar.', true); }
+      else{ toast('No se pudo eliminar: '+mensajeError(error), true); }
+      return;
+    }
+    toast('Servicio eliminado'); cerrarModal(); renderServiciosCatalogo();
+  });
+}
 function modalServicio(s){
   s = s || {};
   abrirModal(s.id?'Editar servicio':'Nuevo servicio', `
@@ -1958,6 +2001,7 @@ async function cargarUsuarios(){
     <div class="item-row glass">
       <span class="info"><span class="t1">${esc(u.nombre_completo)} <span class="badge b-rol-${esc(u.rol)}">${esc(u.rol)}</span></span><span class="t2">Desde ${fmtFecha(u.created_at)}</span></span>
       <span class="acts">
+        <button class="btn btn-glass btn-sm" onclick='abrirModalEditarUsuarioJSON(${JSON.stringify({id:u.id, nombre_completo:u.nombre_completo})})'><i data-ic="pencil"></i></button>
         ${u.id!==PERFIL.id?`<select onchange="cambiarRolUsuario('${u.id}', this.value)" style="width:auto;padding:7px 10px;font-size:11.5px;">
           <option value="vendedor" ${u.rol==='vendedor'?'selected':''}>Vendedor</option>
           <option value="jefe" ${u.rol==='jefe'?'selected':''}>Jefe</option>
@@ -1966,6 +2010,22 @@ async function cargarUsuarios(){
         <span class="switch"><input type="checkbox" ${u.activo?'checked':''} onchange="cambiarActivoUsuario('${u.id}', this.checked)"><span class="track"></span></span>`:'<span class="chip">Tú</span>'}
       </span>
     </div>`).join('');
+  drawIcons(cont);
+}
+function abrirModalEditarUsuarioJSON(u){ modalEditarUsuario(u); }
+function modalEditarUsuario(u){
+  abrirModal('Editar usuario', `
+    <label class="field-label">Nombre completo</label><input type="text" id="euNombre" data-cap="nombre" value="${esc(u.nombre_completo)}">
+    <button class="btn btn-primary btn-block" id="btnGuardarEdicionUsuario" style="margin-top:18px;">Guardar cambios</button>
+  `);
+  document.getElementById('btnGuardarEdicionUsuario').addEventListener('click', async function(){
+    const btn=this; const nombre = document.getElementById('euNombre').value.trim();
+    if(!nombre){ toast('Escribe el nombre completo', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const {error} = await sb.from('perfiles').update({nombre_completo: nombre}).eq('id', u.id);
+    if(error){ toast('No se pudo guardar: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Guardar cambios'; return; }
+    toast('Usuario actualizado'); cerrarModal(); cargarUsuarios();
+  });
 }
 async function cambiarRolUsuario(id, rol){
   const {error} = await sb.from('perfiles').update({rol}).eq('id', id);
