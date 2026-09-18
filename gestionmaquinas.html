@@ -222,6 +222,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--g1); box-shadow:0 0 0
 .seg-mini button.active{border-color:var(--g-line); background:var(--g-soft); color:var(--g1);}
 
 .help-text{font-size:11px; color:var(--ink-faint); margin-top:5px; line-height:1.55;}
+/* Autocompletado de clientes registrados */
+.ac-wrap{position:relative;}
+.ac-list{position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:70; max-height:186px; overflow-y:auto; border-radius:14px; background:var(--glass-strong); backdrop-filter:blur(26px) saturate(170%); -webkit-backdrop-filter:blur(26px) saturate(170%); border:1px solid var(--line-2); box-shadow:var(--shadow-pop); display:none;}
+.ac-list.show{display:block;}
+.ac-item{padding:10px 13px; cursor:pointer; border-bottom:1px solid var(--line);}
+.ac-item:last-child{border-bottom:none;}
+.ac-item:hover,.ac-item.sel{background:var(--g-soft);}
+.ac-item .a1{font-size:12.5px; font-weight:700;}
+.ac-item .a2{font-size:11px; color:var(--ink-soft); margin-top:2px;}
+.ac-empty{padding:11px 13px; font-size:11.5px; color:var(--ink-faint);}
 .divider{height:1px; background:var(--line); margin:16px 0;}
 .chip{display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:99px; background:rgba(255,255,255,.05); border:1px solid var(--line); font-size:11px; font-weight:600; color:var(--ink-soft);}
 .cart-line{display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line);}
@@ -705,6 +715,52 @@ async function buscarOCrearCliente(telefono, nombre){
   const {data, error} = await sb.from('clientes').insert({telefono, nombre: nombre?capitalizar(nombre):null}).select().single();
   return {data, error};
 }
+
+/* ---------- Autocompletado de clientes ya registrados ----------
+   Permite escoger un cliente del historial o escribirlo nuevo.
+   campoBuscarClienteHTML(id) devuelve el HTML; initBuscarCliente(id, cb)
+   lo activa y llama cb(cliente) al elegir uno de la lista. */
+function campoBuscarClienteHTML(id, etiqueta){
+  return `<label class="field-label">${esc(etiqueta||'Buscar cliente registrado')}</label>
+    <div class="ac-wrap">
+      <input type="text" id="${id}" placeholder="Escribe el nombre o teléfono…" autocomplete="off">
+      <div class="ac-list" id="${id}List"></div>
+    </div>
+    <div class="help-text">Elige uno del historial o deja el campo vacío y llena los datos abajo para registrar uno nuevo.</div>`;
+}
+function initBuscarCliente(id, onSelect){
+  const input = document.getElementById(id);
+  const lista = document.getElementById(id+'List');
+  if(!input || !lista) return;
+  let temporizador = null;
+  function ocultar(){ lista.classList.remove('show'); lista.innerHTML=''; }
+  input.addEventListener('input', function(){
+    const texto = input.value.trim();
+    clearTimeout(temporizador);
+    if(texto.length < 2){ ocultar(); return; }
+    temporizador = setTimeout(async function(){
+      const {data} = await sb.from('clientes').select('*')
+        .or(`nombre.ilike.%${texto}%,telefono.ilike.%${texto}%`).order('nombre').limit(8);
+      if(!data || data.length===0){
+        lista.innerHTML = '<div class="ac-empty">Sin coincidencias — se registrará como cliente nuevo</div>';
+        lista.classList.add('show'); return;
+      }
+      lista.innerHTML = data.map((cl,i)=>`
+        <div class="ac-item" data-i="${i}">
+          <div class="a1">${esc(cl.nombre||'Sin nombre')}</div>
+          <div class="a2">${esc(cl.telefono)}</div>
+        </div>`).join('');
+      lista.classList.add('show');
+      lista.querySelectorAll('.ac-item').forEach(el=> el.addEventListener('click', function(){
+        const cl = data[Number(this.dataset.i)];
+        input.value = (cl.nombre||'') + ' · ' + cl.telefono;
+        ocultar();
+        if(onSelect) onSelect(cl);
+      }));
+    }, 250);
+  });
+  input.addEventListener('blur', ()=> setTimeout(ocultar, 180));
+}
 async function registrarMovimientoCuenta(cliente_id, tipo, monto, concepto, refs){
   if(!cliente_id || !monto) return;
   await sb.from('movimientos_cuenta_cliente').insert(Object.assign({
@@ -937,13 +993,21 @@ function pedirMarcarPagado(lavado){
    método de pago e impresión del recibo (impresora de tickets)
 ===================================================================== */
 async function abrirTicketLavado(lavado){
-  const [{data: extras}, {data: productos}, {data: servicios}] = await Promise.all([
+  const [{data: extras}, {data: productos}, {data: servicios}, {data: movs}] = await Promise.all([
     sb.from('lavado_extras').select('*').eq('lavado_id', lavado.id).order('created_at'),
     sb.from('productos').select('*').eq('activo', true).gt('stock',0).order('nombre'),
-    sb.from('servicios').select('*').eq('activo', true).order('nombre')
+    sb.from('servicios').select('*').eq('activo', true).order('nombre'),
+    lavado.cliente_id
+      ? sb.from('movimientos_cuenta_cliente').select('*').eq('referencia_lavado_id', lavado.id).eq('anulado', false).order('created_at')
+      : Promise.resolve({data:[]})
   ]);
   const listaExtras = extras || [];
+  const listaMovs = movs || [];
   const total = Number(lavado.precio_usd) + listaExtras.reduce((a,b)=>a+Number(b.subtotal_usd),0);
+  // Los abonos (débitos) descuentan del total; los créditos son el saldo fiado
+  const abonado = listaMovs.filter(m=>m.tipo==='debito').reduce((a,b)=>a+Number(b.monto_usd),0);
+  const fiado = listaMovs.filter(m=>m.tipo==='credito').reduce((a,b)=>a+Number(b.monto_usd),0);
+  const saldoPendiente = Math.max(0, total - abonado - fiado);
   const facturaAbierta = lavado.estado !== 'pagado' && !lavado.anulado;
   const opcionesProd = (productos||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_usd}" data-nombre="${esc(p.nombre)}">${esc(p.nombre)} — ${fmtUsd(p.precio_usd)}</option>`).join('');
   const opcionesServ = (servicios||[]).map(s=>`<option value="${s.id}" data-precio="${s.precio_usd}" data-nombre="${esc(s.nombre)}">${esc(s.nombre)} — ${fmtUsd(s.precio_usd)}</option>`).join('');
@@ -979,10 +1043,25 @@ async function abrirTicketLavado(lavado){
       <span style="font-weight:700;font-size:13.5px;">Total a cobrar</span>
       <span class="amt mono" style="font-size:19px;">${fmtUsd(total)}</span>
     </div>
+    ${abonado>0?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+      <span style="font-size:12.5px;color:var(--g1);font-weight:600;">Abonado</span>
+      <span class="amt mono" style="font-size:13.5px;color:var(--g1);">− ${fmtUsd(abonado)}</span>
+    </div>`:''}
+    ${fiado>0?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+      <span style="font-size:12.5px;color:var(--amber);font-weight:600;">Financiado (fiado)</span>
+      <span class="amt mono" style="font-size:13.5px;color:var(--amber);">− ${fmtUsd(fiado)}</span>
+    </div>`:''}
+    ${(abonado>0||fiado>0)?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">
+      <span style="font-weight:800;font-size:13.5px;">Saldo pendiente</span>
+      <span class="amt mono" style="font-size:17px;color:${saldoPendiente>0?'var(--amber)':'var(--g1)'};">${fmtUsd(saldoPendiente)}</span>
+    </div>`:''}
     <div id="tkTotalBs" class="help-text" style="text-align:right;margin-top:-4px;"></div>
     <label class="field-label">Método de pago</label>
     <select id="tkMetodo">${opcionesMetodoPago(lavado.metodo_pago)}</select>
-    ${facturaAbierta?`<button class="btn btn-primary btn-block" id="btnMarcarPagadoTicket" type="button" style="margin-top:16px;"><i data-ic="check"></i>Marcar como pagado (cerrar factura)</button>`:`<div class="chip" style="margin-top:16px;">🔒 Factura cerrada — pagada</div>`}
+    ${facturaAbierta?`
+      <button class="btn btn-primary btn-block" id="btnMarcarPagadoTicket" type="button" style="margin-top:16px;"><i data-ic="check"></i>Marcar como pagado (cerrar factura)</button>
+      <button class="btn btn-glass btn-block" id="btnFinanciarTicket" type="button" style="margin-top:10px;"><i data-ic="credit-card"></i>Financiar / Fiado (cerrar a crédito)</button>
+    `:`<div class="chip" style="margin-top:16px;">🔒 Factura cerrada — ${lavado.metodo_pago==='credito'?'financiada':'pagada'}</div>`}
     <div class="form-row2" style="margin-top:10px;">
       <button class="btn btn-glass" id="btnCobroAbono" type="button"><i data-ic="credit-card"></i>Cobro / Abono</button>
       <button class="btn btn-glass" id="btnImprimirRecibo" type="button"><i data-ic="receipt"></i>Imprimir</button>
@@ -993,7 +1072,7 @@ async function abrirTicketLavado(lavado){
   function pintarTotalBsTicket(){
     const cont = document.getElementById('tkTotalBs');
     const metodo = document.getElementById('tkMetodo').value;
-    cont.textContent = lineaTotalBs(total, metodo);
+    cont.textContent = lineaTotalBs(saldoPendiente, metodo);
   }
   pintarTotalBsTicket();
 
@@ -1032,11 +1111,48 @@ async function abrirTicketLavado(lavado){
     if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
     lavado.estado = 'pagado'; toast('Factura cerrada como pagada'); refrescarListadoDeFondo(); abrirTicketLavado(lavado);
   });
+  // Financiar: cierra la factura a crédito y registra el saldo como deuda del
+  // cliente automáticamente (aparece solo en Créditos y débitos)
+  const btnFinanciar = document.getElementById('btnFinanciarTicket');
+  if(btnFinanciar) btnFinanciar.addEventListener('click', function(){
+    if(!lavado.cliente_id){ toast('Este lavado no tiene un cliente registrado para financiarlo', true); return; }
+    if(saldoPendiente <= 0){ toast('Esta factura no tiene saldo pendiente por financiar', true); return; }
+    abrirModal('Financiar / Fiado', `
+      <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 4px;">
+        Se cerrará la factura de <b style="color:var(--ink);">${esc(lavado.nombre_cliente)}</b> a crédito y el monto quedará registrado como deuda en su cuenta.
+      </p>
+      <label class="field-label">Monto a financiar (USD)</label>
+      <input type="number" step="0.01" id="fnMonto" value="${saldoPendiente.toFixed(2)}">
+      <div class="help-text">Si el cliente abona una parte ahora, reduce este monto: solo se financiará el resto.</div>
+      <label class="field-label">Concepto</label>
+      <input type="text" id="fnConcepto" value="Lavado fiado${lavado.placa?(' — '+esc(lavado.placa)):''}">
+      <div class="modal-actions">
+        <button class="btn btn-glass btn-block" id="fnCancelar">Cancelar</button>
+        <button class="btn btn-primary btn-block" id="fnConfirmar">Financiar</button>
+      </div>
+    `);
+    document.getElementById('fnCancelar').addEventListener('click', ()=> abrirTicketLavado(lavado));
+    document.getElementById('fnConfirmar').addEventListener('click', async function(){
+      const btn=this; const monto = Number(document.getElementById('fnMonto').value);
+      if(!monto || monto<=0){ toast('Escribe un monto válido', true); return; }
+      btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+      await registrarMovimientoCuenta(lavado.cliente_id, 'credito', monto,
+        document.getElementById('fnConcepto').value.trim()||'Lavado fiado', {referencia_lavado_id: lavado.id});
+      const {error} = await sb.from('lavados').update({estado:'pagado', metodo_pago:'credito'}).eq('id', lavado.id);
+      if(error){ toast('Se registró la deuda, pero no se pudo cerrar la factura: '+mensajeError(error), true); }
+      else{ lavado.estado='pagado'; lavado.metodo_pago='credito'; toast('Factura financiada y deuda registrada'); }
+      refrescarListadoDeFondo(); abrirTicketLavado(lavado);
+    });
+  });
   document.getElementById('btnActualizarTicket').addEventListener('click', function(){
     cerrarModal(); refrescarListadoDeFondo(); toast('Listado actualizado');
   });
   document.getElementById('btnCobroAbono').addEventListener('click', function(){
-    modalMovimientoCliente({id: lavado.cliente_id, nombre: lavado.nombre_cliente, telefono: lavado.telefono});
+    modalMovimientoCliente(
+      {id: lavado.cliente_id, nombre: lavado.nombre_cliente, telefono: lavado.telefono},
+      null,
+      {referencia_lavado_id: lavado.id, saldoPendiente, volverAlTicket: lavado}
+    );
   });
   document.getElementById('btnImprimirRecibo').addEventListener('click', ()=> imprimirReciboLavado(lavado));
 }
@@ -1089,6 +1205,7 @@ async function modalNuevoLavado(prefill){
   const {data: servicios} = await sb.from('servicios').select('*').eq('activo', true).order('nombre');
   const opcionesServicio = (servicios||[]).map(s=>`<option value="${s.id}" data-precio="${s.precio_usd}" data-tipo="${s.tipo_vehiculo}">${esc(s.nombre)} (${labelTipoVeh(s.tipo_vehiculo)}) — ${fmtUsd(s.precio_usd)}</option>`).join('');
   abrirModal(prefill.citaId?'Atender cita — nuevo lavado':'Nuevo lavado', `
+    ${campoBuscarClienteHTML('nlBuscar')}
     <label class="field-label">Teléfono del cliente</label>
     <input type="tel" id="nlTelefono" placeholder="0412-1234567" value="${esc(prefill.telefono||'')}">
     <label class="field-label">Nombre del cliente</label>
@@ -1131,6 +1248,10 @@ async function modalNuevoLavado(prefill){
     pintarTotalBsNuevoLavado();
   });
   pintarTotalBsNuevoLavado();
+  initBuscarCliente('nlBuscar', function(cl){
+    document.getElementById('nlTelefono').value = cl.telefono || '';
+    document.getElementById('nlNombre').value = cl.nombre || '';
+  });
   if(prefill.servicioId){ document.getElementById('nlServicio').value = prefill.servicioId; document.getElementById('nlServicio').dispatchEvent(new Event('change')); }
   document.getElementById('btnGuardarLavado').addEventListener('click', async function(){
     const btn=this;
@@ -1225,6 +1346,7 @@ async function modalNuevaCita(){
   const {data: servicios} = await sb.from('servicios').select('*').eq('activo', true).order('nombre');
   const opcionesServicio = (servicios||[]).map(s=>`<option value="${s.id}" data-tipo="${s.tipo_vehiculo}">${esc(s.nombre)} (${labelTipoVeh(s.tipo_vehiculo)})</option>`).join('');
   abrirModal('Apartar cita de lavado', `
+    ${campoBuscarClienteHTML('ncBuscar')}
     <label class="field-label">Teléfono del cliente</label><input type="tel" id="ncTelefono" placeholder="0412-1234567">
     <label class="field-label">Nombre del cliente</label><input type="text" id="ncNombre" data-cap="nombre" placeholder="Nombre y apellido">
     <div class="form-row2">
@@ -1243,6 +1365,10 @@ async function modalNuevaCita(){
     <button class="btn btn-primary btn-block" id="btnGuardarCita" style="margin-top:18px;">Apartar cita</button>
   `, '480px');
   let modalidad='local';
+  initBuscarCliente('ncBuscar', function(cl){
+    document.getElementById('ncTelefono').value = cl.telefono || '';
+    document.getElementById('ncNombre').value = cl.nombre || '';
+  });
   document.querySelectorAll('.seg-mini [data-mod]').forEach(b=> b.addEventListener('click', function(){
     document.querySelectorAll('.seg-mini [data-mod]').forEach(x=>x.classList.remove('active'));
     this.classList.add('active'); modalidad = this.dataset.mod;
@@ -1412,6 +1538,7 @@ async function renderVenderProductos(){
     <div class="divider"></div>
     <div id="carritoLineas"></div>
     <div class="divider"></div>
+    ${campoBuscarClienteHTML('vpBuscar')}
     <label class="field-label">Teléfono del cliente (opcional)</label><input type="tel" id="vpTelefono" placeholder="0412-1234567">
     <label class="field-label">Nombre del cliente (opcional)</label><input type="text" id="vpNombre" data-cap="nombre">
     <label class="field-label">Método de pago</label>
@@ -1424,6 +1551,10 @@ async function renderVenderProductos(){
   `;
   drawIcons(body);
   document.getElementById('vpMetodo').addEventListener('change', pintarCarrito);
+  initBuscarCliente('vpBuscar', function(cl){
+    document.getElementById('vpTelefono').value = cl.telefono || '';
+    document.getElementById('vpNombre').value = cl.nombre || '';
+  });
   document.getElementById('btnAgregarCarrito').addEventListener('click', function(){
     const sel = document.getElementById('vpProducto');
     const opt = sel.selectedOptions[0];
@@ -1696,16 +1827,86 @@ async function renderKardex(){
 /* =====================================================================
    CUENTAS DE CLIENTES — CRÉDITOS Y DÉBITOS
 ===================================================================== */
-async function cargarCuentasClientes(){
+let CUENTAS_TAB = 'saldos';
+function cargarCuentasClientes(){ CUENTAS_TAB='saldos'; pintarTabsCuentas(); }
+function pintarTabsCuentas(){
   var c = document.getElementById('content');
-  c.innerHTML = `
+  c.innerHTML = `<div class="tabs-row" id="cuentasTabs"></div><div id="cuentasBody"></div>`;
+  const tabs = [{id:'saldos',label:'Créditos y débitos'},{id:'clientes',label:'Clientes registrados'}];
+  document.getElementById('cuentasTabs').innerHTML = tabs.map(t=>`<button class="tab-btn ${t.id===CUENTAS_TAB?'active':''}" data-t="${t.id}">${esc(t.label)}</button>`).join('');
+  document.getElementById('cuentasTabs').querySelectorAll('[data-t]').forEach(b=> b.addEventListener('click', ()=>{ CUENTAS_TAB=b.dataset.t; pintarTabsCuentas(); }));
+  (CUENTAS_TAB==='saldos'?renderSaldosClientes:renderClientesRegistrados)();
+}
+function renderSaldosClientes(){
+  var body = document.getElementById('cuentasBody');
+  body.innerHTML = `
     <div class="section-head"><h2>Créditos y débitos de clientes</h2><button class="btn btn-primary btn-sm" id="btnNuevoMovCliente"><i data-ic="plus"></i>Registrar movimiento</button></div>
     <input type="text" id="fClienteBuscar" placeholder="Buscar cliente por nombre o teléfono…" style="margin-bottom:14px;">
     <div class="card-list" id="listaCuentasClientes"></div>`;
-  drawIcons(c);
+  drawIcons(body);
   document.getElementById('btnNuevoMovCliente').addEventListener('click', ()=> modalMovimientoCliente());
   document.getElementById('fClienteBuscar').addEventListener('input', debounce(buscarCuentasClientes, 260));
   buscarCuentasClientes();
+}
+// Historial de clientes registrados (igual que el listado de proveedores)
+async function renderClientesRegistrados(){
+  var body = document.getElementById('cuentasBody');
+  body.innerHTML = `
+    <div class="section-head"><h2>Clientes registrados</h2><button class="btn btn-primary btn-sm" id="btnNuevoCliente"><i data-ic="user-plus"></i>Nuevo cliente</button></div>
+    <input type="text" id="fRegClienteBuscar" placeholder="Buscar por nombre o teléfono…" style="margin-bottom:14px;">
+    <div class="card-list" id="listaClientesReg"></div>`;
+  drawIcons(body);
+  document.getElementById('btnNuevoCliente').addEventListener('click', modalNuevoClienteRegistro);
+  document.getElementById('fRegClienteBuscar').addEventListener('input', debounce(buscarClientesRegistrados, 260));
+  buscarClientesRegistrados();
+}
+async function buscarClientesRegistrados(){
+  const cont = document.getElementById('listaClientesReg');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const texto = (document.getElementById('fRegClienteBuscar').value||'').trim();
+  let q = sb.from('clientes').select('*').order('created_at',{ascending:false}).limit(200);
+  if(texto) q = q.or(`nombre.ilike.%${texto}%,telefono.ilike.%${texto}%`);
+  const {data, error} = await q;
+  if(error){ cont.innerHTML = `<div class="error-state">No se pudo cargar: ${esc(mensajeError(error))}</div>`; return; }
+  if(!data || data.length===0){ cont.innerHTML = emptyState('users','No hay clientes registrados con ese criterio'); drawIcons(cont); return; }
+  cont.innerHTML = data.map(cl=>`
+    <div class="item-row glass clickable" onclick="verDetalleCliente('${cl.id}')">
+      <span class="info"><span class="t1">${esc(cl.nombre||'Sin nombre')}</span>
+      <span class="t2">${esc(cl.telefono)} · Registrado el ${fmtFecha(cl.created_at)}</span></span>
+      <span class="acts"><button class="btn btn-glass btn-sm" onclick='event.stopPropagation(); abrirModalEditarClienteJSON(${JSON.stringify({id:cl.id, nombre:cl.nombre, telefono:cl.telefono, email:cl.email, direccion:cl.direccion, notas:cl.notas})})'><i data-ic="pencil"></i></button></span>
+    </div>`).join('');
+  drawIcons(cont);
+}
+function abrirModalEditarClienteJSON(cl){ modalNuevoClienteRegistro(cl); }
+function modalNuevoClienteRegistro(cl){
+  cl = cl || {};
+  abrirModal(cl.id?'Editar cliente':'Nuevo cliente', `
+    <label class="field-label">Nombre y apellido</label><input type="text" id="rcNombre" data-cap="nombre" value="${esc(cl.nombre||'')}">
+    <label class="field-label">Teléfono</label><input type="tel" id="rcTelefono" value="${esc(cl.telefono||'')}">
+    <label class="field-label">Correo (opcional)</label><input type="email" id="rcEmail" value="${esc(cl.email||'')}">
+    <label class="field-label">Dirección (opcional)</label><input type="text" id="rcDireccion" value="${esc(cl.direccion||'')}">
+    <label class="field-label">Notas (opcional)</label><textarea id="rcNotas">${esc(cl.notas||'')}</textarea>
+    <button class="btn btn-primary btn-block" id="btnGuardarClienteReg" style="margin-top:18px;">Guardar cliente</button>
+  `);
+  document.getElementById('btnGuardarClienteReg').addEventListener('click', async function(){
+    const btn=this;
+    const telefono = document.getElementById('rcTelefono').value.trim();
+    if(!telefono){ toast('Escribe el teléfono del cliente', true); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const payload = {
+      nombre: document.getElementById('rcNombre').value.trim()||null, telefono,
+      email: document.getElementById('rcEmail').value.trim()||null,
+      direccion: document.getElementById('rcDireccion').value.trim()||null,
+      notas: document.getElementById('rcNotas').value.trim()||null
+    };
+    const q = cl.id ? sb.from('clientes').update(payload).eq('id', cl.id) : sb.from('clientes').insert(payload);
+    const {error} = await q;
+    if(error){
+      toast((error.message||'').includes('duplicate')?'Ya existe un cliente con ese teléfono':('No se pudo guardar: '+mensajeError(error)), true);
+      btn.disabled=false; btn.innerHTML='Guardar cliente'; return;
+    }
+    toast('Cliente guardado'); cerrarModal(); buscarClientesRegistrados();
+  });
 }
 async function buscarCuentasClientes(){
   const cont = document.getElementById('listaCuentasClientes');
@@ -1765,19 +1966,30 @@ function pedirAnularMovCliente(id, clienteId){
     toast('Movimiento anulado'); verDetalleCliente(clienteId);
   }, true);
 }
-function modalMovimientoCliente(cliente, tipoFijo){
+function modalMovimientoCliente(cliente, tipoFijo, ctx){
   cliente = cliente || null;
+  ctx = ctx || {};
   abrirModal(tipoFijo==='credito'?'Registrar crédito':(tipoFijo==='debito'?'Registrar abono':'Registrar movimiento'), `
     ${cliente?`<div class="chip" style="margin-bottom:10px;">${esc(cliente.nombre||cliente.telefono)}</div>`:`
+    ${campoBuscarClienteHTML('mcBuscar')}
     <label class="field-label">Teléfono del cliente</label><input type="tel" id="mcTelefono">
     <label class="field-label">Nombre del cliente</label><input type="text" id="mcNombre" data-cap="nombre">`}
+    ${ctx.saldoPendiente!==undefined?`<div class="help-text" style="margin-bottom:6px;">Saldo pendiente de esta factura: <b style="color:var(--ink);">${fmtUsd(ctx.saldoPendiente)}</b></div>`:''}
     ${!tipoFijo?`<label class="field-label">Tipo de movimiento</label>
     <div class="seg-mini"><button type="button" class="active" data-tipo="credito">Crédito (debe)</button><button type="button" data-tipo="debito">Abono (paga)</button></div>`:''}
-    <label class="field-label">Monto (USD)</label><input type="number" step="0.01" id="mcMonto">
+    <label class="field-label">Monto (USD)</label><input type="number" step="0.01" id="mcMonto"${ctx.saldoPendiente!==undefined?` value="${Number(ctx.saldoPendiente).toFixed(2)}"`:''}>
     <label class="field-label">Concepto</label><input type="text" id="mcConcepto" placeholder="Ej: fiado del lavado, abono en efectivo…">
     <button class="btn btn-primary btn-block" id="btnGuardarMovCliente" style="margin-top:18px;">Guardar</button>
   `);
   let tipo = tipoFijo || 'credito';
+  let clienteElegido = cliente;
+  if(!cliente){
+    initBuscarCliente('mcBuscar', function(cl){
+      clienteElegido = cl;
+      document.getElementById('mcTelefono').value = cl.telefono || '';
+      document.getElementById('mcNombre').value = cl.nombre || '';
+    });
+  }
   document.querySelectorAll('.seg-mini [data-tipo]').forEach(b=> b.addEventListener('click', function(){
     document.querySelectorAll('.seg-mini [data-tipo]').forEach(x=>x.classList.remove('active'));
     this.classList.add('active'); tipo = this.dataset.tipo;
@@ -1786,8 +1998,8 @@ function modalMovimientoCliente(cliente, tipoFijo){
     const btn=this; const monto = Number(document.getElementById('mcMonto').value);
     if(!monto || monto<=0){ toast('Escribe un monto válido', true); return; }
     btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
-    let cl = cliente;
-    if(!cl){
+    let cl = clienteElegido;
+    if(!cl || !cl.id){
       const telefono = document.getElementById('mcTelefono').value.trim();
       const nombre = document.getElementById('mcNombre').value.trim();
       if(!telefono){ toast('Escribe el teléfono del cliente', true); btn.disabled=false; btn.innerHTML='Guardar'; return; }
@@ -1795,8 +2007,11 @@ function modalMovimientoCliente(cliente, tipoFijo){
       if(error){ toast('No se pudo registrar el cliente: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Guardar'; return; }
       cl = data;
     }
-    await registrarMovimientoCuenta(cl.id, tipo, monto, document.getElementById('mcConcepto').value.trim()||null);
-    toast('Movimiento registrado'); cerrarModal();
+    const refs = ctx.referencia_lavado_id ? {referencia_lavado_id: ctx.referencia_lavado_id} : null;
+    await registrarMovimientoCuenta(cl.id, tipo, monto, document.getElementById('mcConcepto').value.trim()||null, refs);
+    toast('Movimiento registrado');
+    if(ctx.volverAlTicket){ refrescarListadoDeFondo(); abrirTicketLavado(ctx.volverAlTicket); return; }
+    cerrarModal();
     if(VISTA_ACTUAL==='cuentas_clientes') buscarCuentasClientes();
   });
 }
