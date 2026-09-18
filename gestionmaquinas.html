@@ -838,6 +838,18 @@ async function registrarMovimientoCuenta(cliente_id, tipo, monto, concepto, refs
     cliente_id, tipo, monto_usd:monto, concepto, creado_por: PERFIL.id
   }, refs||{}));
 }
+// Se asegura de que el total de un lavado quede registrado como deuda base
+// (crédito) la primera vez que se toca su cuenta — así un abono parcial
+// siempre queda descontando de algo, en vez de aparecer como "a favor".
+// Si ya existe algún movimiento para ese lavado, no hace nada.
+async function asegurarObligacionLavado(lavadoId, clienteId, total){
+  if(!clienteId || !total) return false;
+  const {data: existentes} = await sb.from('movimientos_cuenta_cliente')
+    .select('id').eq('referencia_lavado_id', lavadoId).eq('anulado', false).limit(1);
+  if(existentes && existentes.length) return false;
+  await registrarMovimientoCuenta(clienteId, 'credito', total, 'Total de la factura', {referencia_lavado_id: lavadoId});
+  return true;
+}
 async function sumarSelloFidelidad(cliente_id){
   if(!cliente_id) return;
   let {data: tarjeta} = await sb.from('tarjetas_fidelidad').select('*').eq('cliente_id', cliente_id).maybeSingle();
@@ -1082,10 +1094,12 @@ async function abrirTicketLavado(lavado){
   const listaExtras = extras || [];
   const listaMovs = movs || [];
   const total = Number(lavado.precio_usd) + listaExtras.reduce((a,b)=>a+Number(b.subtotal_usd),0);
-  // Los abonos (débitos) descuentan del total; los créditos son el saldo fiado
+  // El abono descuenta de lo pendiente. El saldo pendiente real es el neto
+  // (crédito - débito) de los movimientos de este lavado: así un abono
+  // parcial queda "debiendo" el resto, en vez de aparecer como "a favor".
   const abonado = listaMovs.filter(m=>m.tipo==='debito').reduce((a,b)=>a+Number(b.monto_usd),0);
-  const fiado = listaMovs.filter(m=>m.tipo==='credito').reduce((a,b)=>a+Number(b.monto_usd),0);
-  const saldoPendiente = Math.max(0, total - abonado - fiado);
+  const netoCliente = listaMovs.reduce((a,m)=> a + (m.tipo==='credito'? Number(m.monto_usd) : -Number(m.monto_usd)), 0);
+  const saldoPendiente = listaMovs.length===0 ? total : Math.max(0, netoCliente);
   const facturaAbierta = lavado.estado !== 'pagado' && !lavado.anulado;
   const opcionesProd = (productos||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_usd}" data-nombre="${esc(p.nombre)}">${esc(p.nombre)} — ${fmtUsd(p.precio_usd)}</option>`).join('');
   const opcionesServ = (servicios||[]).map(s=>`<option value="${s.id}" data-precio="${s.precio_usd}" data-nombre="${esc(s.nombre)}">${esc(s.nombre)} — ${fmtUsd(s.precio_usd)}</option>`).join('');
@@ -1125,11 +1139,7 @@ async function abrirTicketLavado(lavado){
       <span style="font-size:12.5px;color:var(--g1);font-weight:600;">Abonado</span>
       <span class="amt mono" style="font-size:13.5px;color:var(--g1);">− ${fmtUsd(abonado)}</span>
     </div>`:''}
-    ${fiado>0?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
-      <span style="font-size:12.5px;color:var(--amber);font-weight:600;">Financiado (fiado)</span>
-      <span class="amt mono" style="font-size:13.5px;color:var(--amber);">− ${fmtUsd(fiado)}</span>
-    </div>`:''}
-    ${(abonado>0||fiado>0)?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">
+    ${listaMovs.length>0?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">
       <span style="font-weight:800;font-size:13.5px;">Saldo pendiente</span>
       <span class="amt mono" style="font-size:17px;color:${saldoPendiente>0?'var(--amber)':'var(--g1)'};">${fmtUsd(saldoPendiente)}</span>
     </div>`:''}
@@ -1203,38 +1213,24 @@ async function abrirTicketLavado(lavado){
     if(error){ toast('No se pudo actualizar: '+mensajeError(error), true); return; }
     lavado.estado = 'pagado'; toast('Factura cerrada como pagada'); refrescarListadoDeFondo(); abrirTicketLavado(lavado);
   });
-  // Financiar: cierra la factura a crédito y registra el saldo como deuda del
-  // cliente automáticamente (aparece solo en Créditos y débitos)
+  // Financiar: cierra la factura a crédito. Si ya existe una obligación
+  // registrada para este lavado (por ejemplo, ya se le hizo un abono), no
+  // se duplica el crédito: el saldo pendiente ya está correctamente
+  // reflejado en Créditos y débitos.
   const btnFinanciar = document.getElementById('btnFinanciarTicket');
   if(btnFinanciar) btnFinanciar.addEventListener('click', function(){
     if(!lavado.cliente_id){ toast('Este lavado no tiene un cliente registrado para financiarlo', true); return; }
     if(saldoPendiente <= 0){ toast('Esta factura no tiene saldo pendiente por financiar', true); return; }
-    abrirModal('Financiar / Fiado', `
-      <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 4px;">
-        Se cerrará la factura de <b style="color:var(--ink);">${esc(lavado.nombre_cliente)}</b> a crédito y el monto quedará registrado como deuda en su cuenta.
-      </p>
-      <label class="field-label">Monto a financiar (USD)</label>
-      <input type="number" step="0.01" id="fnMonto" value="${saldoPendiente.toFixed(2)}">
-      <div class="help-text">Si el cliente abona una parte ahora, reduce este monto: solo se financiará el resto.</div>
-      <label class="field-label">Concepto</label>
-      <input type="text" id="fnConcepto" value="Lavado fiado${lavado.placa?(' — '+esc(lavado.placa)):''}">
-      <div class="modal-actions">
-        <button class="btn btn-glass btn-block" id="fnCancelar">Cancelar</button>
-        <button class="btn btn-primary btn-block" id="fnConfirmar">Financiar</button>
-      </div>
-    `);
-    document.getElementById('fnCancelar').addEventListener('click', ()=> abrirTicketLavado(lavado));
-    document.getElementById('fnConfirmar').addEventListener('click', async function(){
-      const btn=this; const monto = Number(document.getElementById('fnMonto').value);
-      if(!monto || monto<=0){ toast('Escribe un monto válido', true); return; }
-      btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
-      await registrarMovimientoCuenta(lavado.cliente_id, 'credito', monto,
-        document.getElementById('fnConcepto').value.trim()||'Lavado fiado', {referencia_lavado_id: lavado.id});
-      const {error} = await sb.from('lavados').update({estado:'pagado', metodo_pago:'credito'}).eq('id', lavado.id);
-      if(error){ toast('Se registró la deuda, pero no se pudo cerrar la factura: '+mensajeError(error), true); }
-      else{ lavado.estado='pagado'; lavado.metodo_pago='credito'; toast('Factura financiada y deuda registrada'); }
-      refrescarListadoDeFondo(); abrirTicketLavado(lavado);
-    });
+    confirmarAccion('Financiar / Fiado',
+      'Se cerrará la factura de '+lavado.nombre_cliente+' y quedará un saldo de '+fmtUsd(saldoPendiente)+' registrado como deuda en su cuenta, visible en Créditos y débitos.',
+      'Financiar', async ()=>{
+        await asegurarObligacionLavado(lavado.id, lavado.cliente_id, total);
+        const {error} = await sb.from('lavados').update({estado:'pagado', metodo_pago:'credito'}).eq('id', lavado.id);
+        if(error){ toast('No se pudo cerrar la factura: '+mensajeError(error), true); return; }
+        lavado.estado='pagado'; lavado.metodo_pago='credito';
+        toast('Factura financiada y deuda registrada'); cerrarModal();
+        refrescarListadoDeFondo(); abrirTicketLavado(lavado);
+      });
   });
   document.getElementById('btnActualizarTicket').addEventListener('click', function(){
     cerrarModal(); refrescarListadoDeFondo(); toast('Listado actualizado');
@@ -1243,7 +1239,7 @@ async function abrirTicketLavado(lavado){
     modalMovimientoCliente(
       {id: lavado.cliente_id, nombre: lavado.nombre_cliente, telefono: lavado.telefono},
       null,
-      {referencia_lavado_id: lavado.id, saldoPendiente, volverAlTicket: lavado}
+      {referencia_lavado_id: lavado.id, total, saldoPendiente, volverAlTicket: lavado}
     );
   });
   document.getElementById('btnImprimirRecibo').addEventListener('click', ()=> imprimirReciboLavado(lavado));
@@ -2140,6 +2136,8 @@ function pedirAnularMovCliente(id, clienteId){
 function modalMovimientoCliente(cliente, tipoFijo, ctx){
   cliente = cliente || null;
   ctx = ctx || {};
+  // Si viene de un ticket con saldo pendiente, lo normal es que sea un abono
+  const tipoInicial = tipoFijo || (ctx.referencia_lavado_id ? 'debito' : 'credito');
   abrirModal(tipoFijo==='credito'?'Registrar crédito':(tipoFijo==='debito'?'Registrar abono':'Registrar movimiento'), `
     ${cliente?`<div class="chip" style="margin-bottom:10px;">${esc(cliente.nombre||cliente.telefono)}</div>`:`
     ${campoBuscarClienteHTML('mcBuscar')}
@@ -2147,12 +2145,15 @@ function modalMovimientoCliente(cliente, tipoFijo, ctx){
     <label class="field-label">Nombre del cliente</label><input type="text" id="mcNombre" data-cap="nombre">`}
     ${ctx.saldoPendiente!==undefined?`<div class="help-text" style="margin-bottom:6px;">Saldo pendiente de esta factura: <b style="color:var(--ink);">${fmtUsd(ctx.saldoPendiente)}</b></div>`:''}
     ${!tipoFijo?`<label class="field-label">Tipo de movimiento</label>
-    <div class="seg-mini"><button type="button" class="active" data-tipo="credito">Crédito (debe)</button><button type="button" data-tipo="debito">Abono (paga)</button></div>`:''}
+    <div class="seg-mini">
+      <button type="button" class="${tipoInicial==='credito'?'active':''}" data-tipo="credito">Crédito (debe)</button>
+      <button type="button" class="${tipoInicial==='debito'?'active':''}" data-tipo="debito">Abono (paga)</button>
+    </div>`:''}
     <label class="field-label">Monto (USD)</label><input type="number" step="0.01" id="mcMonto"${ctx.saldoPendiente!==undefined?` value="${Number(ctx.saldoPendiente).toFixed(2)}"`:''}>
     <label class="field-label">Concepto</label><input type="text" id="mcConcepto" placeholder="Ej: fiado del lavado, abono en efectivo…">
     <button class="btn btn-primary btn-block" id="btnGuardarMovCliente" style="margin-top:18px;">Guardar</button>
   `);
-  let tipo = tipoFijo || 'credito';
+  let tipo = tipoInicial;
   let clienteElegido = cliente;
   if(!cliente){
     initBuscarCliente('mcBuscar', function(cl){
@@ -2177,6 +2178,12 @@ function modalMovimientoCliente(cliente, tipoFijo, ctx){
       const {data, error} = await buscarOCrearCliente(telefono, nombre);
       if(error){ toast('No se pudo registrar el cliente: '+mensajeError(error), true); btn.disabled=false; btn.innerHTML='Guardar'; return; }
       cl = data;
+    }
+    // Si es un abono contra un lavado que todavía no tiene su deuda base
+    // registrada, se registra primero (así queda "debiendo el resto" y no
+    // "a favor" al insertar solo el abono).
+    if(tipo==='debito' && ctx.referencia_lavado_id && ctx.total){
+      await asegurarObligacionLavado(ctx.referencia_lavado_id, cl.id, ctx.total);
     }
     const refs = ctx.referencia_lavado_id ? {referencia_lavado_id: ctx.referencia_lavado_id} : null;
     await registrarMovimientoCuenta(cl.id, tipo, monto, document.getElementById('mcConcepto').value.trim()||null, refs);
