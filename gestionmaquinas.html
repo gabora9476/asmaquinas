@@ -668,6 +668,9 @@ async function mostrarAperturaCaja(){
   const {data, error} = await sb.rpc('estado_caja_hoy');
   if(error){ console.error('No se pudo leer la caja', error); return; }
   if(data && data.tasa_manual_hoy) TASA_MANUAL = Number(data.tasa_manual_hoy);
+  // Ya se registró la caja de hoy (por este usuario o por cualquier otro):
+  // no se vuelve a mostrar el diálogo en lo que resta del día.
+  if(data && data.hoy_registrado) return;
   const montoAnterior = Number(data?.monto_anterior || 0);
   const fechaAnterior = data?.fecha_anterior;
   const tasaSugerida = TASA_MANUAL || TASA_EUR_BCV;
@@ -1211,8 +1214,7 @@ async function abrirTicketLavado(lavado){
     lavado.metodo_pago = this.value; toast('Método de pago actualizado'); pintarTotalBsTicket(); refrescarListadoDeFondo();
   });
   const btnPagado = document.getElementById('btnMarcarPagadoTicket');
-  if(btnPagado) btnPagado.addEventListener('click', async function(){
-    const btn = this;
+  if(btnPagado) btnPagado.addEventListener('click', function(){
     const abonoInput = document.getElementById('tkAbono');
     const abono = abonoInput ? Math.max(0, Number(abonoInput.value)||0) : 0;
     if(abono > saldoPendiente + 0.01){ toast('El abono no puede ser mayor al saldo pendiente', true); return; }
@@ -1220,28 +1222,32 @@ async function abrirTicketLavado(lavado){
     if(restante > 0.01 && !lavado.cliente_id){
       toast('Este lavado no tiene un cliente registrado para dejarle una deuda', true); return;
     }
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Guardando…';
-    // Si queda algo pendiente, se asegura la deuda base y se descuenta el abono.
-    // Si no quedaba nada pendiente pero ya había historial (se estaba
-    // saldando una deuda previa), el abono también se registra para
-    // dejarla en cero. Un pago normal de contado (sin historial) no
-    // toca Créditos y débitos, como siempre.
+    async function cerrarFactura(){
+      // Si queda algo pendiente, se asegura la deuda base y se descuenta el
+      // abono. Si no quedaba nada pendiente pero ya había historial (se
+      // estaba saldando una deuda previa), el abono también se registra
+      // para dejarla en cero. Un pago normal de contado (sin historial)
+      // no toca Créditos y débitos, como siempre.
+      if(restante > 0.01){
+        await asegurarObligacionLavado(lavado.id, lavado.cliente_id, total);
+        if(abono > 0) await registrarMovimientoCuenta(lavado.cliente_id, 'debito', abono, 'Abono al cerrar la factura', {referencia_lavado_id: lavado.id});
+      } else if(abono > 0 && listaMovs.length > 0){
+        await registrarMovimientoCuenta(lavado.cliente_id, 'debito', abono, 'Abono al cerrar la factura', {referencia_lavado_id: lavado.id});
+      }
+      const nuevoMetodo = restante > 0.01 ? 'credito' : lavado.metodo_pago;
+      const {error} = await sb.from('lavados').update({estado:'pagado', metodo_pago: nuevoMetodo}).eq('id', lavado.id);
+      if(error){ toast('No se pudo cerrar la factura: '+mensajeError(error), true); return; }
+      lavado.estado = 'pagado'; lavado.metodo_pago = nuevoMetodo;
+      toast(restante>0.01 ? ('Factura cerrada — queda debiendo '+fmtUsd(restante)) : 'Factura cerrada como pagada');
+      refrescarListadoDeFondo(); abrirTicketLavado(lavado);
+    }
     if(restante > 0.01){
-      await asegurarObligacionLavado(lavado.id, lavado.cliente_id, total);
-      if(abono > 0) await registrarMovimientoCuenta(lavado.cliente_id, 'debito', abono, 'Abono al cerrar la factura', {referencia_lavado_id: lavado.id});
-    } else if(abono > 0 && listaMovs.length > 0){
-      await registrarMovimientoCuenta(lavado.cliente_id, 'debito', abono, 'Abono al cerrar la factura', {referencia_lavado_id: lavado.id});
+      confirmarAccion('El cliente quedará debiendo',
+        'Pagó '+fmtUsd(abono)+' de '+fmtUsd(saldoPendiente)+'. Quedará una deuda de '+fmtUsd(restante)+' registrada en Créditos y débitos. ¿Cerrar la factura así?',
+        'Cerrar factura', cerrarFactura);
+    } else {
+      cerrarFactura();
     }
-    const nuevoMetodo = restante > 0.01 ? 'credito' : lavado.metodo_pago;
-    const {error} = await sb.from('lavados').update({estado:'pagado', metodo_pago: nuevoMetodo}).eq('id', lavado.id);
-    if(error){
-      toast('No se pudo cerrar la factura: '+mensajeError(error), true);
-      btn.disabled = false; btn.innerHTML = '<i data-ic="check"></i>Marcar como pagado'; drawIcons(document.getElementById('modalRoot'));
-      return;
-    }
-    lavado.estado = 'pagado'; lavado.metodo_pago = nuevoMetodo;
-    toast(restante>0.01 ? ('Factura cerrada — queda debiendo '+fmtUsd(restante)) : 'Factura cerrada como pagada');
-    refrescarListadoDeFondo(); abrirTicketLavado(lavado);
   });
   document.getElementById('btnActualizarTicket').addEventListener('click', function(){
     cerrarModal(); refrescarListadoDeFondo(); toast('Listado actualizado');
@@ -2607,6 +2613,7 @@ function modalNuevoUsuario(){
 async function cargarConfigTab(){
   const {data: cfg} = await sb.from('config_general').select('*').eq('id',1).single();
   CONFIG_GENERAL = cfg || CONFIG_GENERAL;
+  const {data: cajaHoy} = await sb.rpc('estado_caja_hoy');
   var c = document.getElementById('content');
   c.innerHTML = `
     <div class="section-head"><h2>Configuración general</h2></div>
@@ -2633,6 +2640,13 @@ async function cargarConfigTab(){
       <label class="field-label">Nuevo código (mínimo 4 caracteres)</label>
       <input type="password" id="cfgCodigo" placeholder="••••••" autocomplete="new-password">
       <button class="btn btn-primary" style="margin-top:14px;" id="btnGuardarCodigo">Guardar código</button>
+    </div>
+    <div class="stat-card glass" style="max-width:520px; padding:20px; margin-top:16px; ${(esAdmin() && cajaHoy?.hoy_registrado)?'':'display:none;'}">
+      <h3 style="font-size:14px;margin:0 0 4px;">Tasa del día</h3>
+      <div class="help-text" style="margin-top:0;">La caja de hoy ya fue abierta, así que el diálogo de inicio de sesión no volverá a aparecer. Usa esto solo si te equivocaste al configurar la tasa.</div>
+      <label class="field-label">Tasa de hoy (Bs. por USD)</label>
+      <input type="number" step="0.0001" id="cfgTasaHoy" value="${cajaHoy?.tasa_manual_hoy ? Number(cajaHoy.tasa_manual_hoy).toFixed(4) : ''}" placeholder="${TASA_EUR_BCV?Number(TASA_EUR_BCV).toFixed(4):'BCV-Euro'}">
+      <button class="btn btn-primary" style="margin-top:14px;" id="btnGuardarTasaHoy">Corregir tasa de hoy</button>
     </div>`;
   drawIcons(c);
   sb.rpc('hay_codigo_autorizacion').then(({data})=>{
@@ -2649,6 +2663,16 @@ async function cargarConfigTab(){
     document.getElementById('cfgCodigo').value = '';
     document.getElementById('cfgCodigoEstado').innerHTML = '<b style="color:var(--g1);">Ya hay un código configurado.</b>';
     toast('Código de autorización actualizado');
+  });
+  const btnTasaHoy = document.getElementById('btnGuardarTasaHoy');
+  if(btnTasaHoy) btnTasaHoy.addEventListener('click', async function(){
+    const btn=this; btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+    const tasa = Number(document.getElementById('cfgTasaHoy').value)||null;
+    const {error} = await sb.rpc('abrir_caja_dia', {p_monto: Number(cajaHoy?.monto_hoy||0), p_tasa: tasa, p_notas: null});
+    btn.disabled=false; btn.innerHTML='Corregir tasa de hoy';
+    if(error){ toast('No se pudo guardar: '+mensajeError(error), true); return; }
+    TASA_MANUAL = tasa;
+    toast('Tasa del día corregida');
   });
   document.getElementById('btnGuardarConfig').addEventListener('click', async function(){
     const btn=this; btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
